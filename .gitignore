@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual env
+venv/
+venv_quake/
+
+# Cache + metadata
+cache/
+metadata/
+results/
+state/
+
+# MinIO data
+minio/
+
+# OS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
