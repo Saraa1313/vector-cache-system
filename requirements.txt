@@ -1,6 +1,6 @@
-faiss-cpu==1.13.2
+faiss-cpu==1.13.0
 grpcio==1.80.0
 grpcio-tools==1.71.0
 minio==7.2.20
-numpy==2.4.3
+numpy==2.0.2
 protobuf==5.29.4
