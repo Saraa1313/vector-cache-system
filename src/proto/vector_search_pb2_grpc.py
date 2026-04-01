@@ -54,6 +54,11 @@ class VectorSearchStub(object):
                 request_serializer=vector__search__pb2.UpdateRequest.SerializeToString,
                 response_deserializer=vector__search__pb2.UpdateResponse.FromString,
                 _registered_method=True)
+        self.ClearCache = channel.unary_unary(
+                '/vectorsearch.VectorSearch/ClearCache',
+                request_serializer=vector__search__pb2.ClearCacheRequest.SerializeToString,
+                response_deserializer=vector__search__pb2.ClearCacheResponse.FromString,
+                _registered_method=True)
 
 
 class VectorSearchServicer(object):
@@ -83,6 +88,12 @@ class VectorSearchServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def ClearCache(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_VectorSearchServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -105,6 +116,11 @@ def add_VectorSearchServicer_to_server(servicer, server):
                     servicer.Update,
                     request_deserializer=vector__search__pb2.UpdateRequest.FromString,
                     response_serializer=vector__search__pb2.UpdateResponse.SerializeToString,
+            ),
+            'ClearCache': grpc.unary_unary_rpc_method_handler(
+                    servicer.ClearCache,
+                    request_deserializer=vector__search__pb2.ClearCacheRequest.FromString,
+                    response_serializer=vector__search__pb2.ClearCacheResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -215,6 +231,33 @@ class VectorSearch(object):
             '/vectorsearch.VectorSearch/Update',
             vector__search__pb2.UpdateRequest.SerializeToString,
             vector__search__pb2.UpdateResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ClearCache(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/vectorsearch.VectorSearch/ClearCache',
+            vector__search__pb2.ClearCacheRequest.SerializeToString,
+            vector__search__pb2.ClearCacheResponse.FromString,
             options,
             channel_credentials,
             insecure,

@@ -50,11 +50,14 @@ class QueryNode:
 
         t1 = time.perf_counter()
         candidate_ids, candidate_vecs = [], []
+        cache_hits = 0
         for cid in probe_ids:
             entry = self._cache.get(int(cid))
             if entry is None:
                 entry = self.store.load_centroid(int(cid))
                 self._cache.put(int(cid), entry)
+            else:
+                cache_hits += 1
             c_ids, c_vecs = entry
             candidate_ids.append(c_ids)
             candidate_vecs.append(c_vecs)
@@ -68,7 +71,7 @@ class QueryNode:
         scan_ms = (time.perf_counter() - t2) * 1000
 
         results = [{"id": int(candidate_ids[i]), "distance": float(dists[i])} for i in top_idx]
-        return results, centroid_search_ms, fetch_ms, scan_ms
+        return results, centroid_search_ms, fetch_ms, scan_ms, cache_hits
 
 
     def insert(self, vector: np.ndarray) -> int:
@@ -96,6 +99,9 @@ class QueryNode:
             self._cache.put(cid, (ids[mask], vecs[mask]))
             del self.id_to_centroid[vector_id]
         return True
+
+    def clear_cache(self) -> None:
+        self._cache = LRUCache(CACHE_SIZE)
 
     def update(self, vector_id: int, new_vector: np.ndarray) -> bool:
         old_cid = self.id_to_centroid.get(vector_id)

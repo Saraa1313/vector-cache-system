@@ -28,15 +28,18 @@ def run_nprobe(stub, queries, gt, nprobe):
     I_pred = []
     errors = 0
     total_centroid_ms = total_fetch_ms = total_scan_ms = 0.0
+    total_cache_hits = total_cache_probes = 0
     t0 = time.time()
 
     for q in queries:
         try:
             resp = stub.Search(pb2.SearchRequest(vector=q.tolist(), top_k=TOPK, n_probe=nprobe))
             I_pred.append([n.id for n in resp.results])
-            total_centroid_ms += resp.centroid_search_ms
-            total_fetch_ms    += resp.fetch_ms
-            total_scan_ms     += resp.scan_ms
+            total_centroid_ms   += resp.centroid_search_ms
+            total_fetch_ms      += resp.fetch_ms
+            total_scan_ms       += resp.scan_ms
+            total_cache_hits    += resp.cache_hits
+            total_cache_probes  += nprobe
         except grpc.RpcError as e:
             print(f"  Error: {e}")
             errors += 1
@@ -45,11 +48,13 @@ def run_nprobe(stub, queries, gt, nprobe):
     elapsed_ms = (time.time() - t0) * 1000
     n = len(queries)
     recall = compute_recall(I_pred, gt, TOPK)
+    hit_pct = 100.0 * total_cache_hits / total_cache_probes if total_cache_probes else 0.0
     print(f"  nprobe={nprobe:4d} | "
           f"avg total={elapsed_ms/n:.2f} ms  "
           f"centroid={total_centroid_ms/n:.2f} ms  "
           f"fetch={total_fetch_ms/n:.2f} ms  "
           f"scan={total_scan_ms/n:.2f} ms  "
+          f"cache_hit={hit_pct:.1f}%  "
           f"recall@{TOPK}={recall:.4f}  errors={errors}")
 
 
@@ -62,6 +67,7 @@ def main():
     stub = pb2_grpc.VectorSearchStub(channel)
 
     for nprobe in N_PROBE:
+        stub.ClearCache(pb2.ClearCacheRequest())
         run_nprobe(stub, queries, gt, nprobe)
 
 

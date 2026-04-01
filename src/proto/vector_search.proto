@@ -2,10 +2,11 @@ syntax = "proto3";
 package vectorsearch;
 
 service VectorSearch {
-  rpc Search(SearchRequest)   returns (SearchResponse);
-  rpc Insert(InsertRequest)   returns (InsertResponse);
-  rpc Delete(DeleteRequest)   returns (DeleteResponse);
-  rpc Update(UpdateRequest)   returns (UpdateResponse);
+  rpc Search(SearchRequest)       returns (SearchResponse);
+  rpc Insert(InsertRequest)       returns (InsertResponse);
+  rpc Delete(DeleteRequest)       returns (DeleteResponse);
+  rpc Update(UpdateRequest)       returns (UpdateResponse);
+  rpc ClearCache(ClearCacheRequest) returns (ClearCacheResponse);
 }
 
 message SearchRequest {
@@ -24,6 +25,7 @@ message SearchResponse {
   float centroid_search_ms         = 2;  // time to find n_probe centroids
   float fetch_ms                   = 3;  // total MinIO fetch time
   float scan_ms                    = 4;  // brute-force L2 scan time
+  int32 cache_hits                 = 5;  // centroids served from cache (out of n_probe)
 }
 
 message InsertRequest {
@@ -50,3 +52,6 @@ message UpdateRequest {
 message UpdateResponse {
   bool success = 1;
 }
+
+message ClearCacheRequest  {}
+message ClearCacheResponse {}

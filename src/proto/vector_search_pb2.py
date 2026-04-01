@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x13vector_search.proto\x12\x0cvectorsearch\"?\n\rSearchRequest\x12\x0e\n\x06vector\x18\x01 \x03(\x02\x12\r\n\x05top_k\x18\x02 \x01(\x05\x12\x0f\n\x07n_probe\x18\x03 \x01(\x05\"(\n\x08Neighbor\x12\n\n\x02id\x18\x01 \x01(\x03\x12\x10\n\x08\x64istance\x18\x02 \x01(\x02\"x\n\x0eSearchResponse\x12\'\n\x07results\x18\x01 \x03(\x0b\x32\x16.vectorsearch.Neighbor\x12\x1a\n\x12\x63\x65ntroid_search_ms\x18\x02 \x01(\x02\x12\x10\n\x08\x66\x65tch_ms\x18\x03 \x01(\x02\x12\x0f\n\x07scan_ms\x18\x04 \x01(\x02\"\x1f\n\rInsertRequest\x12\x0e\n\x06vector\x18\x01 \x03(\x02\"\x1c\n\x0eInsertResponse\x12\n\n\x02id\x18\x01 \x01(\x03\"\x1b\n\rDeleteRequest\x12\n\n\x02id\x18\x01 \x01(\x03\"!\n\x0e\x44\x65leteResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\"/\n\rUpdateRequest\x12\n\n\x02id\x18\x01 \x01(\x03\x12\x12\n\nnew_vector\x18\x02 \x03(\x02\"!\n\x0eUpdateResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x32\xa2\x02\n\x0cVectorSearch\x12\x43\n\x06Search\x12\x1b.vectorsearch.SearchRequest\x1a\x1c.vectorsearch.SearchResponse\x12\x43\n\x06Insert\x12\x1b.vectorsearch.InsertRequest\x1a\x1c.vectorsearch.InsertResponse\x12\x43\n\x06\x44\x65lete\x12\x1b.vectorsearch.DeleteRequest\x1a\x1c.vectorsearch.DeleteResponse\x12\x43\n\x06Update\x12\x1b.vectorsearch.UpdateRequest\x1a\x1c.vectorsearch.UpdateResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x13vector_search.proto\x12\x0cvectorsearch\"?\n\rSearchRequest\x12\x0e\n\x06vector\x18\x01 \x03(\x02\x12\r\n\x05top_k\x18\x02 \x01(\x05\x12\x0f\n\x07n_probe\x18\x03 \x01(\x05\"(\n\x08Neighbor\x12\n\n\x02id\x18\x01 \x01(\x03\x12\x10\n\x08\x64istance\x18\x02 \x01(\x02\"\x8c\x01\n\x0eSearchResponse\x12\'\n\x07results\x18\x01 \x03(\x0b\x32\x16.vectorsearch.Neighbor\x12\x1a\n\x12\x63\x65ntroid_search_ms\x18\x02 \x01(\x02\x12\x10\n\x08\x66\x65tch_ms\x18\x03 \x01(\x02\x12\x0f\n\x07scan_ms\x18\x04 \x01(\x02\x12\x12\n\ncache_hits\x18\x05 \x01(\x05\"\x1f\n\rInsertRequest\x12\x0e\n\x06vector\x18\x01 \x03(\x02\"\x1c\n\x0eInsertResponse\x12\n\n\x02id\x18\x01 \x01(\x03\"\x1b\n\rDeleteRequest\x12\n\n\x02id\x18\x01 \x01(\x03\"!\n\x0e\x44\x65leteResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\"/\n\rUpdateRequest\x12\n\n\x02id\x18\x01 \x01(\x03\x12\x12\n\nnew_vector\x18\x02 \x03(\x02\"!\n\x0eUpdateResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\"\x13\n\x11\x43learCacheRequest\"\x14\n\x12\x43learCacheResponse2\xf3\x02\n\x0cVectorSearch\x12\x43\n\x06Search\x12\x1b.vectorsearch.SearchRequest\x1a\x1c.vectorsearch.SearchResponse\x12\x43\n\x06Insert\x12\x1b.vectorsearch.InsertRequest\x1a\x1c.vectorsearch.InsertResponse\x12\x43\n\x06\x44\x65lete\x12\x1b.vectorsearch.DeleteRequest\x1a\x1c.vectorsearch.DeleteResponse\x12\x43\n\x06Update\x12\x1b.vectorsearch.UpdateRequest\x1a\x1c.vectorsearch.UpdateResponse\x12O\n\nClearCache\x12\x1f.vectorsearch.ClearCacheRequest\x1a .vectorsearch.ClearCacheResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -35,20 +35,24 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_SEARCHREQUEST']._serialized_end=100
   _globals['_NEIGHBOR']._serialized_start=102
   _globals['_NEIGHBOR']._serialized_end=142
-  _globals['_SEARCHRESPONSE']._serialized_start=144
-  _globals['_SEARCHRESPONSE']._serialized_end=264
-  _globals['_INSERTREQUEST']._serialized_start=266
-  _globals['_INSERTREQUEST']._serialized_end=297
-  _globals['_INSERTRESPONSE']._serialized_start=299
-  _globals['_INSERTRESPONSE']._serialized_end=327
-  _globals['_DELETEREQUEST']._serialized_start=329
-  _globals['_DELETEREQUEST']._serialized_end=356
-  _globals['_DELETERESPONSE']._serialized_start=358
-  _globals['_DELETERESPONSE']._serialized_end=391
-  _globals['_UPDATEREQUEST']._serialized_start=393
-  _globals['_UPDATEREQUEST']._serialized_end=440
-  _globals['_UPDATERESPONSE']._serialized_start=442
-  _globals['_UPDATERESPONSE']._serialized_end=475
-  _globals['_VECTORSEARCH']._serialized_start=478
-  _globals['_VECTORSEARCH']._serialized_end=768
+  _globals['_SEARCHRESPONSE']._serialized_start=145
+  _globals['_SEARCHRESPONSE']._serialized_end=285
+  _globals['_INSERTREQUEST']._serialized_start=287
+  _globals['_INSERTREQUEST']._serialized_end=318
+  _globals['_INSERTRESPONSE']._serialized_start=320
+  _globals['_INSERTRESPONSE']._serialized_end=348
+  _globals['_DELETEREQUEST']._serialized_start=350
+  _globals['_DELETEREQUEST']._serialized_end=377
+  _globals['_DELETERESPONSE']._serialized_start=379
+  _globals['_DELETERESPONSE']._serialized_end=412
+  _globals['_UPDATEREQUEST']._serialized_start=414
+  _globals['_UPDATEREQUEST']._serialized_end=461
+  _globals['_UPDATERESPONSE']._serialized_start=463
+  _globals['_UPDATERESPONSE']._serialized_end=496
+  _globals['_CLEARCACHEREQUEST']._serialized_start=498
+  _globals['_CLEARCACHEREQUEST']._serialized_end=517
+  _globals['_CLEARCACHERESPONSE']._serialized_start=519
+  _globals['_CLEARCACHERESPONSE']._serialized_end=539
+  _globals['_VECTORSEARCH']._serialized_start=542
+  _globals['_VECTORSEARCH']._serialized_end=913
 # @@protoc_insertion_point(module_scope)
