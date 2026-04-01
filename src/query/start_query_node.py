@@ -17,10 +17,9 @@ def serve():
     node = QueryNode()
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     pb2_grpc.add_VectorSearchServicer_to_server(VectorSearchServicer(node), server)
-    address = f"{QUERY_NODE_HOST}:{GRPC_PORT}"
-    server.add_insecure_port(address)
+    server.add_insecure_port(f"0.0.0.0:{GRPC_PORT}")
     server.start()
-    print(f"Query node listening on {address}", flush=True)
+    print(f"Query node listening on 0.0.0.0:{GRPC_PORT}", flush=True)
     server.wait_for_termination()
 
 
