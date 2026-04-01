@@ -1,4 +1,5 @@
 import threading
+import time
 import numpy as np
 import faiss
 
@@ -38,21 +39,30 @@ class QueryNode:
 
     def search(self, query: np.ndarray, topk: int, n_probe: int = _DEFAULT_N_PROBE):
         q = np.ascontiguousarray(query.reshape(1, -1).astype(np.float32))
+
+        t0 = time.perf_counter()
         _, I = self._centroid_index.search(q, n_probe)
         probe_ids = I[0]
+        centroid_search_ms = (time.perf_counter() - t0) * 1000
 
+        t1 = time.perf_counter()
         candidate_ids, candidate_vecs = [], []
         for cid in probe_ids:
             c_ids, c_vecs = self.store.load_centroid(int(cid))
             candidate_ids.append(c_ids)
             candidate_vecs.append(c_vecs)
+        fetch_ms = (time.perf_counter() - t1) * 1000
 
         candidate_ids = np.concatenate(candidate_ids)
         candidate_vecs = np.concatenate(candidate_vecs, axis=0)
 
+        t2 = time.perf_counter()
         dists = ((candidate_vecs - query) ** 2).sum(axis=1)
         top_idx = np.argsort(dists)[:topk]
-        return [{"id": int(candidate_ids[i]), "distance": float(dists[i])} for i in top_idx]
+        scan_ms = (time.perf_counter() - t2) * 1000
+
+        results = [{"id": int(candidate_ids[i]), "distance": float(dists[i])} for i in top_idx]
+        return results, centroid_search_ms, fetch_ms, scan_ms
 
 
     def insert(self, vector: np.ndarray) -> int:

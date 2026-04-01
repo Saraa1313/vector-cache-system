@@ -20,7 +20,10 @@ message Neighbor {
 }
 
 message SearchResponse {
-  repeated Neighbor results = 1;
+  repeated Neighbor results        = 1;
+  float centroid_search_ms         = 2;  // time to find n_probe centroids
+  float fetch_ms                   = 3;  // total MinIO fetch time
+  float scan_ms                    = 4;  // brute-force L2 scan time
 }
 
 message InsertRequest {
