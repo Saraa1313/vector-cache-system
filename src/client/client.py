@@ -30,6 +30,7 @@ def run_nprobe(stub, queries, gt, nprobe):
     total_centroid_ms = total_fetch_ms = total_scan_ms = 0.0
     total_cache_hits = total_cache_probes = 0
     t0 = time.time()
+    completed_queries = 0
 
     for q in queries:
         try:
@@ -40,6 +41,9 @@ def run_nprobe(stub, queries, gt, nprobe):
             total_scan_ms       += resp.scan_ms
             total_cache_hits    += resp.cache_hits
             total_cache_probes  += nprobe
+            completed_queries += 1
+            if completed_queries % 1000 == 0:
+                print(f"  Completed {completed_queries} queries")
         except grpc.RpcError as e:
             print(f"  Error: {e}")
             errors += 1
