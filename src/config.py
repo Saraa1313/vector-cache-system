@@ -15,6 +15,7 @@ N_CENTROIDS = 1000
 N_PROBE = [1, 2, 5, 10, 20, 50, 100]
 
 TOPK = 10
+CACHE_SIZE = 256   # max centroid objects held in memory
 QUERY_NODE_HOST = "172.22.152.104"
 GRPC_PORT = 50051
 NUMBER_OF_QUERIES = 10000

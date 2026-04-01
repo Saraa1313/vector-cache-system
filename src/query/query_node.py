@@ -3,7 +3,8 @@ import time
 import numpy as np
 import faiss
 
-from config import N_PROBE, CENTROIDS_PATH
+from config import N_PROBE, CENTROIDS_PATH, CACHE_SIZE
+from query.lru_cache import LRUCache
 
 _DEFAULT_N_PROBE = N_PROBE[0] if isinstance(N_PROBE, list) else N_PROBE
 from storage.object_store import ObjectStore
@@ -32,6 +33,8 @@ class QueryNode:
         self._centroid_index = faiss.IndexFlatL2(d)
         self._centroid_index.add(np.ascontiguousarray(self.centroids))
 
+        self._cache = LRUCache(CACHE_SIZE)
+
     def _nearest_centroid(self, vector: np.ndarray) -> int:
         q = np.ascontiguousarray(vector.reshape(1, -1).astype(np.float32))
         _, I = self._centroid_index.search(q, 1)
@@ -48,7 +51,11 @@ class QueryNode:
         t1 = time.perf_counter()
         candidate_ids, candidate_vecs = [], []
         for cid in probe_ids:
-            c_ids, c_vecs = self.store.load_centroid(int(cid))
+            entry = self._cache.get(int(cid))
+            if entry is None:
+                entry = self.store.load_centroid(int(cid))
+                self._cache.put(int(cid), entry)
+            c_ids, c_vecs = entry
             candidate_ids.append(c_ids)
             candidate_vecs.append(c_vecs)
         fetch_ms = (time.perf_counter() - t1) * 1000
@@ -72,6 +79,7 @@ class QueryNode:
             ids = np.append(ids, np.int64(new_id))
             vecs = np.vstack([vecs, vector.reshape(1, -1)])
             self.store.save_centroid(cid, ids, vecs)
+            self._cache.put(cid, (ids, vecs))
             self.id_to_centroid[new_id] = cid
             self.next_id += 1
         return new_id
@@ -85,6 +93,7 @@ class QueryNode:
             ids, vecs = self.store.load_centroid(cid)
             mask = ids != vector_id
             self.store.save_centroid(cid, ids[mask], vecs[mask])
+            self._cache.put(cid, (ids[mask], vecs[mask]))
             del self.id_to_centroid[vector_id]
         return True
 
@@ -98,15 +107,18 @@ class QueryNode:
                 ids, vecs = self.store.load_centroid(old_cid)
                 vecs[ids == vector_id] = new_vector
                 self.store.save_centroid(old_cid, ids, vecs)
+                self._cache.put(old_cid, (ids, vecs))
             else:
                 # Remove from old centroid
                 ids, vecs = self.store.load_centroid(old_cid)
                 mask = ids != vector_id
                 self.store.save_centroid(old_cid, ids[mask], vecs[mask])
+                self._cache.put(old_cid, (ids[mask], vecs[mask]))
                 # Add to new centroid
                 ids, vecs = self.store.load_centroid(new_cid)
                 ids = np.append(ids, np.int64(vector_id))
                 vecs = np.vstack([vecs, new_vector.reshape(1, -1)])
                 self.store.save_centroid(new_cid, ids, vecs)
+                self._cache.put(new_cid, (ids, vecs))
                 self.id_to_centroid[vector_id] = new_cid
         return True
