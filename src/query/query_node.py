@@ -53,10 +53,9 @@ class QueryNode:
             candidate_vecs.append(c_vecs)
         fetch_ms = (time.perf_counter() - t1) * 1000
 
+        t2 = time.perf_counter()
         candidate_ids = np.concatenate(candidate_ids)
         candidate_vecs = np.concatenate(candidate_vecs, axis=0)
-
-        t2 = time.perf_counter()
         dists = ((candidate_vecs - query) ** 2).sum(axis=1)
         top_idx = np.argsort(dists)[:topk]
         scan_ms = (time.perf_counter() - t2) * 1000
