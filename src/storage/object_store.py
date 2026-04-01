@@ -1,8 +1,6 @@
 import io
-import json
 import numpy as np
 from minio import Minio
-from minio.error import S3Error
 
 from config import (
     MINIO_ENDPOINT,
@@ -11,8 +9,6 @@ from config import (
     MINIO_SECURE,
     MINIO_BUCKET,
 )
-
-REMOTE_METADATA_OBJECT = "metadata/remote_metadata.json"
 
 
 class ObjectStore:
@@ -30,59 +26,35 @@ class ObjectStore:
         if not self.client.bucket_exists(self.bucket):
             self.client.make_bucket(self.bucket)
 
-    def save_partition(self, fname: str, ids, vectors):
-        buf = io.BytesIO()
-        np.savez(
-            buf,
-            ids=np.array(ids, dtype=np.int64),
-            vectors=np.array(vectors, dtype=np.float32),
-        )
-        raw = buf.getvalue()
+    def _key(self, centroid_id: int) -> str:
+        return f"centroids/{centroid_id:04d}.npz"
 
+    def save_centroid(self, centroid_id: int, ids, vectors):
+        buf = io.BytesIO()
+        np.savez(buf,
+                 ids=np.array(ids, dtype=np.int64),
+                 vectors=np.array(vectors, dtype=np.float32))
+        raw = buf.getvalue()
         self.client.put_object(
-            self.bucket,
-            f"partitions/{fname}",
-            io.BytesIO(raw),
-            length=len(raw),
+            self.bucket, self._key(centroid_id),
+            io.BytesIO(raw), length=len(raw),
             content_type="application/octet-stream",
         )
 
-    def load_partition(self, fname: str):
-        response = self.client.get_object(self.bucket, f"partitions/{fname}")
+    def load_centroid(self, centroid_id: int):
+        response = self.client.get_object(self.bucket, self._key(centroid_id))
         try:
             raw = response.read()
         finally:
             response.close()
             response.release_conn()
-
-        buf = io.BytesIO(raw)
-        arr = np.load(buf)
+        arr = np.load(io.BytesIO(raw))
         return arr["ids"], arr["vectors"]
 
-    def list_partition_names(self):
-        names = []
-        for obj in self.client.list_objects(self.bucket, prefix="partitions/", recursive=True):
+    def list_centroid_ids(self):
+        ids = []
+        for obj in self.client.list_objects(self.bucket, prefix="centroids/", recursive=True):
             if obj.object_name.endswith(".npz"):
-                names.append(obj.object_name.split("/")[-1])
-        return sorted(names)
-
-    def write_metadata(self, metadata: dict):
-        raw = json.dumps(metadata, indent=2).encode("utf-8")
-        self.client.put_object(
-            self.bucket,
-            REMOTE_METADATA_OBJECT,
-            io.BytesIO(raw),
-            length=len(raw),
-            content_type="application/json",
-        )
-
-    def read_metadata(self) -> dict:
-        try:
-            response = self.client.get_object(self.bucket, REMOTE_METADATA_OBJECT)
-            try:
-                return json.loads(response.read().decode("utf-8"))
-            finally:
-                response.close()
-                response.release_conn()
-        except S3Error:
-            return {}
+                stem = obj.object_name.split("/")[-1].replace(".npz", "")
+                ids.append(int(stem))
+        return sorted(ids)

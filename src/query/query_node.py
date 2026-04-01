@@ -1,40 +1,103 @@
-import os
-import sys
+import threading
 import numpy as np
+import faiss
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from config import N_PROBE, CENTROIDS_PATH
 
-from config import CACHE_DIR, TOPK
+_DEFAULT_N_PROBE = N_PROBE[0] if isinstance(N_PROBE, list) else N_PROBE
+from storage.object_store import ObjectStore
 
 
 class QueryNode:
-    def __init__(self, cache_manager):
-        self.cache_manager = cache_manager
+    def __init__(self):
+        self.centroids = np.load(CENTROIDS_PATH) 
+        self.store = ObjectStore()
+        self._mut_lock = threading.Lock()
 
-    def _load_all_cached_vectors(self):
-        all_ids = []
-        all_vecs = []
+        print("Scanning MinIO to build id→centroid map", flush=True)
+        self.id_to_centroid: dict[int, int] = {}
+        max_id = -1
+        for cid in self.store.list_centroid_ids():
+            ids, _ = self.store.load_centroid(cid)
+            for vid in ids:
+                self.id_to_centroid[int(vid)] = cid
+                if int(vid) > max_id:
+                    max_id = int(vid)
+        self.next_id = max_id + 1
+        print(f"  {len(self.id_to_centroid)} vectors across {len(self.centroids)} centroids", flush=True)
 
-        for fname in sorted(os.listdir(CACHE_DIR)):
-            if fname.endswith(".npz") and self.cache_manager.has_partition(fname):
-                ids, vecs = self.cache_manager.load_partition(fname)
-                all_ids.append(ids)
-                all_vecs.append(vecs)
+        # Faiss index over centroids for fast nearest-centroid lookup
+        d = self.centroids.shape[1]
+        self._centroid_index = faiss.IndexFlatL2(d)
+        self._centroid_index.add(np.ascontiguousarray(self.centroids))
 
-        if not all_ids:
-            return np.array([]), np.empty((0, 0), dtype=np.float32)
+    def _nearest_centroid(self, vector: np.ndarray) -> int:
+        q = np.ascontiguousarray(vector.reshape(1, -1).astype(np.float32))
+        _, I = self._centroid_index.search(q, 1)
+        return int(I[0, 0])
 
-        return np.concatenate(all_ids), np.concatenate(all_vecs)
+    def search(self, query: np.ndarray, topk: int, n_probe: int = _DEFAULT_N_PROBE):
+        q = np.ascontiguousarray(query.reshape(1, -1).astype(np.float32))
+        _, I = self._centroid_index.search(q, n_probe)
+        probe_ids = I[0]
 
-    def search(self, query, topk=TOPK):
-        ids, vecs = self._load_all_cached_vectors()
-        if len(ids) == 0:
-            return []
+        candidate_ids, candidate_vecs = [], []
+        for cid in probe_ids:
+            c_ids, c_vecs = self.store.load_centroid(int(cid))
+            candidate_ids.append(c_ids)
+            candidate_vecs.append(c_vecs)
 
-        dists = np.linalg.norm(vecs - query[None, :], axis=1)
-        order = np.argsort(dists)[:topk]
+        candidate_ids = np.concatenate(candidate_ids)
+        candidate_vecs = np.concatenate(candidate_vecs, axis=0)
 
-        return [
-            {"id": int(ids[i]), "distance": float(dists[i])}
-            for i in order
-        ]
+        dists = ((candidate_vecs - query) ** 2).sum(axis=1)
+        top_idx = np.argsort(dists)[:topk]
+        return [{"id": int(candidate_ids[i]), "distance": float(dists[i])} for i in top_idx]
+
+
+    def insert(self, vector: np.ndarray) -> int:
+        cid = self._nearest_centroid(vector)
+        with self._mut_lock:
+            ids, vecs = self.store.load_centroid(cid)
+            new_id = self.next_id
+            ids = np.append(ids, np.int64(new_id))
+            vecs = np.vstack([vecs, vector.reshape(1, -1)])
+            self.store.save_centroid(cid, ids, vecs)
+            self.id_to_centroid[new_id] = cid
+            self.next_id += 1
+        return new_id
+
+
+    def delete(self, vector_id: int) -> bool:
+        cid = self.id_to_centroid.get(vector_id)
+        if cid is None:
+            return False
+        with self._mut_lock:
+            ids, vecs = self.store.load_centroid(cid)
+            mask = ids != vector_id
+            self.store.save_centroid(cid, ids[mask], vecs[mask])
+            del self.id_to_centroid[vector_id]
+        return True
+
+    def update(self, vector_id: int, new_vector: np.ndarray) -> bool:
+        old_cid = self.id_to_centroid.get(vector_id)
+        if old_cid is None:
+            return False
+        new_cid = self._nearest_centroid(new_vector)
+        with self._mut_lock:
+            if old_cid == new_cid:
+                ids, vecs = self.store.load_centroid(old_cid)
+                vecs[ids == vector_id] = new_vector
+                self.store.save_centroid(old_cid, ids, vecs)
+            else:
+                # Remove from old centroid
+                ids, vecs = self.store.load_centroid(old_cid)
+                mask = ids != vector_id
+                self.store.save_centroid(old_cid, ids[mask], vecs[mask])
+                # Add to new centroid
+                ids, vecs = self.store.load_centroid(new_cid)
+                ids = np.append(ids, np.int64(vector_id))
+                vecs = np.vstack([vecs, new_vector.reshape(1, -1)])
+                self.store.save_centroid(new_cid, ids, vecs)
+                self.id_to_centroid[vector_id] = new_cid
+        return True

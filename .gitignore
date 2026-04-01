@@ -17,6 +17,10 @@ state/
 # MinIO data
 minio/
 
+# Dataset file
+data/
+centroids.npy
+
 # OS
 .DS_Store
 
@@ -26,3 +30,4 @@ minio/
 
 # Logs
 *.log
+*.md
