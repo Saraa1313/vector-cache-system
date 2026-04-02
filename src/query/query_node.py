@@ -2,6 +2,7 @@ import threading
 import time
 import numpy as np
 import faiss
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from config import N_PROBE, CENTROIDS_PATH
 
@@ -46,11 +47,13 @@ class QueryNode:
         centroid_search_ms = (time.perf_counter() - t0) * 1000
 
         t1 = time.perf_counter()
-        candidate_ids, candidate_vecs = [], []
-        for cid in probe_ids:
-            c_ids, c_vecs = self.store.load_centroid(int(cid))
-            candidate_ids.append(c_ids)
-            candidate_vecs.append(c_vecs)
+        with ThreadPoolExecutor(max_workers=len(probe_ids)) as executor:
+            futures = {executor.submit(self.store.load_centroid, int(cid)): cid
+                       for cid in probe_ids}
+            fetched = {cid: future.result() for future, cid in
+                       ((f, futures[f]) for f in as_completed(futures))}
+        candidate_ids = [fetched[cid][0] for cid in probe_ids]
+        candidate_vecs = [fetched[cid][1] for cid in probe_ids]
         fetch_ms = (time.perf_counter() - t1) * 1000
 
         t2 = time.perf_counter()
