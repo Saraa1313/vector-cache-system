@@ -2,6 +2,7 @@ import threading
 import time
 import numpy as np
 import faiss
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from config import N_PROBE, CENTROIDS_PATH, CACHE_SIZE
 from query.lru_cache import LRUCache
@@ -49,18 +50,30 @@ class QueryNode:
         centroid_search_ms = (time.perf_counter() - t0) * 1000
 
         t1 = time.perf_counter()
-        candidate_ids, candidate_vecs = [], []
-        cache_hits = 0
+        # Split probe_ids into cache hits and misses
+        entries: dict[int, tuple] = {}
+        miss_ids = []
         for cid in probe_ids:
             entry = self._cache.get(int(cid))
-            if entry is None:
-                entry = self.store.load_centroid(int(cid))
-                self._cache.put(int(cid), entry)
+            if entry is not None:
+                entries[int(cid)] = entry
             else:
-                cache_hits += 1
-            c_ids, c_vecs = entry
-            candidate_ids.append(c_ids)
-            candidate_vecs.append(c_vecs)
+                miss_ids.append(int(cid))
+        cache_hits = len(probe_ids) - len(miss_ids)
+
+        # Fetch all misses in parallel
+        if miss_ids:
+            with ThreadPoolExecutor(max_workers=len(miss_ids)) as executor:
+                futures = {executor.submit(self.store.load_centroid, cid): cid
+                           for cid in miss_ids}
+                for future in as_completed(futures):
+                    cid = futures[future]
+                    entry = future.result()
+                    self._cache.put(cid, entry)
+                    entries[cid] = entry
+
+        candidate_ids = [entries[int(cid)][0] for cid in probe_ids]
+        candidate_vecs = [entries[int(cid)][1] for cid in probe_ids]
         fetch_ms = (time.perf_counter() - t1) * 1000
 
         t2 = time.perf_counter()

@@ -31,3 +31,4 @@ centroids.npy
 # Logs
 *.log
 *.md
+proto/vector_search_pb2*.py
