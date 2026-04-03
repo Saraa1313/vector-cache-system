@@ -5,33 +5,24 @@ import faiss
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from config import N_PROBE, CENTROIDS_PATH
+from storage.object_store import ObjectStore
+from storage.wal import WALClient
 
 _DEFAULT_N_PROBE = N_PROBE[0] if isinstance(N_PROBE, list) else N_PROBE
-from storage.object_store import ObjectStore
 
 
 class QueryNode:
     def __init__(self):
-        self.centroids = np.load(CENTROIDS_PATH) 
+        self.centroids = np.load(CENTROIDS_PATH)
         self.store = ObjectStore()
-        self._mut_lock = threading.Lock()
+        self._wal = WALClient()
+        self._seq = 0
+        self._seq_lock = threading.Lock()
 
-        print("Scanning MinIO to build id→centroid map", flush=True)
-        self.id_to_centroid: dict[int, int] = {}
-        max_id = -1
-        for cid in self.store.list_centroid_ids():
-            ids, _ = self.store.load_centroid(cid)
-            for vid in ids:
-                self.id_to_centroid[int(vid)] = cid
-                if int(vid) > max_id:
-                    max_id = int(vid)
-        self.next_id = max_id + 1
-        print(f"  {len(self.id_to_centroid)} vectors across {len(self.centroids)} centroids", flush=True)
-
-        # Faiss index over centroids for fast nearest-centroid lookup
         d = self.centroids.shape[1]
         self._centroid_index = faiss.IndexFlatL2(d)
         self._centroid_index.add(np.ascontiguousarray(self.centroids))
+        print("Query node ready", flush=True)
 
     def _nearest_centroid(self, vector: np.ndarray) -> int:
         q = np.ascontiguousarray(vector.reshape(1, -1).astype(np.float32))
@@ -66,50 +57,20 @@ class QueryNode:
         results = [{"id": int(candidate_ids[i]), "distance": float(dists[i])} for i in top_idx]
         return results, centroid_search_ms, fetch_ms, scan_ms
 
+    def _next_seq(self) -> int:
+        with self._seq_lock:
+            self._seq += 1
+            return self._seq
 
     def insert(self, vector: np.ndarray) -> int:
-        cid = self._nearest_centroid(vector)
-        with self._mut_lock:
-            ids, vecs = self.store.load_centroid(cid)
-            new_id = self.next_id
-            ids = np.append(ids, np.int64(new_id))
-            vecs = np.vstack([vecs, vector.reshape(1, -1)])
-            self.store.save_centroid(cid, ids, vecs)
-            self.id_to_centroid[new_id] = cid
-            self.next_id += 1
+        new_id = self._wal.next_vector_id()
+        self._wal.write(self._next_seq(), "add", vector=vector, vector_id=new_id)
         return new_id
 
-
     def delete(self, vector_id: int) -> bool:
-        cid = self.id_to_centroid.get(vector_id)
-        if cid is None:
-            return False
-        with self._mut_lock:
-            ids, vecs = self.store.load_centroid(cid)
-            mask = ids != vector_id
-            self.store.save_centroid(cid, ids[mask], vecs[mask])
-            del self.id_to_centroid[vector_id]
+        self._wal.write(self._next_seq(), "delete", vector_id=vector_id)
         return True
 
     def update(self, vector_id: int, new_vector: np.ndarray) -> bool:
-        old_cid = self.id_to_centroid.get(vector_id)
-        if old_cid is None:
-            return False
-        new_cid = self._nearest_centroid(new_vector)
-        with self._mut_lock:
-            if old_cid == new_cid:
-                ids, vecs = self.store.load_centroid(old_cid)
-                vecs[ids == vector_id] = new_vector
-                self.store.save_centroid(old_cid, ids, vecs)
-            else:
-                # Remove from old centroid
-                ids, vecs = self.store.load_centroid(old_cid)
-                mask = ids != vector_id
-                self.store.save_centroid(old_cid, ids[mask], vecs[mask])
-                # Add to new centroid
-                ids, vecs = self.store.load_centroid(new_cid)
-                ids = np.append(ids, np.int64(vector_id))
-                vecs = np.vstack([vecs, new_vector.reshape(1, -1)])
-                self.store.save_centroid(new_cid, ids, vecs)
-                self.id_to_centroid[vector_id] = new_cid
+        self._wal.write(self._next_seq(), "update", vector=new_vector, vector_id=vector_id)
         return True
