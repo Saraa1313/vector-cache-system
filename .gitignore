@@ -17,6 +17,10 @@ state/
 # MinIO data
 minio/
 
+# DynamoDB Local
+dynamodb-local-metadata.json
+worker_state.json
+
 # Dataset file
 data/
 centroids.npy

@@ -47,5 +47,33 @@ else
   fi
 fi
 
+echo "==> Java 17"
+if java -version 2>&1 | grep -q 'version "17'; then
+  echo "Java 17 already installed"
+else
+  sudo apt-get install -y openjdk-17-jdk
+  JAVA17=$(ls -d /usr/lib/jvm/java-17-openjdk-* 2>/dev/null | head -1)
+  if [ -n "$JAVA17" ]; then
+    sudo update-alternatives --set java "$JAVA17/bin/java" 2>/dev/null || true
+  fi
+fi
+
+echo "==> DynamoDB Local"
+DYNAMO_JAR="/usr/local/lib/dynamodb-local/DynamoDBLocal.jar"
+if [ -f "$DYNAMO_JAR" ]; then
+  echo "DynamoDB Local already installed"
+else
+  TMP=$(mktemp -d)
+  echo "Downloading DynamoDB Local → $TMP"
+  curl -fsSL "https://d1ni2b6xgvw0s0.cloudfront.net/v2.x/dynamodb_local_latest.tar.gz" \
+    -o "$TMP/dynamodb_local.tar.gz"
+  tar -xzf "$TMP/dynamodb_local.tar.gz" -C "$TMP"
+  sudo mkdir -p /usr/local/lib/dynamodb-local
+  sudo mv "$TMP/DynamoDBLocal.jar" /usr/local/lib/dynamodb-local/
+  sudo mv "$TMP/DynamoDBLocal_lib" /usr/local/lib/dynamodb-local/
+  rm -rf "$TMP"
+  echo "DynamoDB Local installed to /usr/local/lib/dynamodb-local/"
+fi
+
 echo ""
 echo "Setup finished. Next: bash src/scripts/start.sh"
