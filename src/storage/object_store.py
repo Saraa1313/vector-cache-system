@@ -29,11 +29,12 @@ class ObjectStore:
     def _key(self, centroid_id: int) -> str:
         return f"centroids/{centroid_id:04d}.npz"
 
-    def save_centroid(self, centroid_id: int, ids, vectors):
+    def save_centroid(self, centroid_id: int, ids, vectors, version: int = 1):
         buf = io.BytesIO()
         np.savez(buf,
                  ids=np.array(ids, dtype=np.int64),
-                 vectors=np.array(vectors, dtype=np.float32))
+                 vectors=np.array(vectors, dtype=np.float32),
+                 version=np.array(version, dtype=np.int64))
         raw = buf.getvalue()
         self.client.put_object(
             self.bucket, self._key(centroid_id),
@@ -49,7 +50,8 @@ class ObjectStore:
             response.close()
             response.release_conn()
         arr = np.load(io.BytesIO(raw))
-        return arr["ids"], arr["vectors"]
+        version = int(arr["version"]) if "version" in arr else 1
+        return arr["ids"], arr["vectors"], version
 
     def list_centroid_ids(self):
         ids = []

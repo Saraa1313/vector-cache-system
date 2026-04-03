@@ -18,7 +18,9 @@ cleanup() {
     echo "Shutting down processes ..."
     kill "$NODE_PID" "$WORKER_PID" "$MINIO_PID" "$DYNAMO_PID" 2>/dev/null || true
     wait "$NODE_PID" "$WORKER_PID" "$MINIO_PID" "$DYNAMO_PID" 2>/dev/null || true
+    rm -rf ~/minio/data          
     rm -rf $PROJECT_ROOT/worker_state.json
+    rm -f  "$PROJECT_ROOT/centroids.npy"               
     echo "Cleanup done."
 }
 trap cleanup EXIT
@@ -40,16 +42,18 @@ DYNAMO_PID=$(cat /tmp/dynamodb-local.pid)
 echo "Starting query node ..."
 python src/query/start_query_node.py &
 NODE_PID=$!
-sleep 2
+sleep 5
 
 echo "Starting worker node ..."
 python src/worker/start_worker_node.py &
 WORKER_PID=$!
-sleep 2
+sleep 5
 
 echo "Running client ..."
-python src/client/client.py
-# python src/client/insert_client.py 10
-# sleep 5
-# python src/client/insert_client.py 10
-# sleep 5
+# python src/client/client.py
+python src/client/insert_client.py 10
+sleep 5
+python src/client/insert_client.py 10
+sleep 5
+python src/client/delete_client.py 1000001 1000020
+sleep 5

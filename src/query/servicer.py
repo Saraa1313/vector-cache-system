@@ -48,3 +48,7 @@ class VectorSearchServicer(pb2_grpc.VectorSearchServicer):
     def ClearCache(self, request, context):
         self.node.clear_cache()
         return pb2.ClearCacheResponse()
+
+    def NotifyBatchApplied(self, request, context):
+        self.node.on_batch_applied(list(request.modified_partition_ids), request.last_seq_id)
+        return pb2.BatchAppliedAck()

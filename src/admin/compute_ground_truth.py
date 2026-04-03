@@ -20,7 +20,7 @@ def load_all_vectors(store: ObjectStore) -> tuple[np.ndarray, np.ndarray]:
         futures = {executor.submit(store.load_centroid, cid): cid for cid in centroid_ids}
         results = []
         for i, future in enumerate(as_completed(futures)):
-            ids, vecs = future.result()
+            ids, vecs, _ = future.result()
             if len(ids) > 0:
                 results.append((ids, vecs))
             if (i + 1) % 100 == 0:

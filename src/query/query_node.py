@@ -52,16 +52,16 @@ class QueryNode:
                 miss_ids.append(int(cid))
         cache_hits = len(probe_ids) - len(miss_ids)
 
-        # Fetch all misses in parallel
+        # Fetch all misses in parallel; cache entry is (ids, vecs, version)
         if miss_ids:
             with ThreadPoolExecutor(max_workers=len(miss_ids)) as executor:
                 futures = {executor.submit(self.store.load_centroid, cid): cid
                            for cid in miss_ids}
                 for future in as_completed(futures):
                     cid = futures[future]
-                    entry = future.result()
-                    self._cache.put(cid, entry)
-                    entries[cid] = entry
+                    ids, vecs, version = future.result()
+                    self._cache.put(cid, (ids, vecs, version))
+                    entries[cid] = (ids, vecs, version)
 
         candidate_ids = [entries[int(cid)][0] for cid in probe_ids]
         candidate_vecs = [entries[int(cid)][1] for cid in probe_ids]
@@ -90,6 +90,14 @@ class QueryNode:
     def delete(self, vector_id: int) -> bool:
         self._wal.write(self._next_seq(), "delete", vector_id=vector_id)
         return True
+
+    def on_batch_applied(self, modified_partition_ids: list[int], last_seq_id: int) -> None:
+        print(f"Query node received batch applied: {modified_partition_ids} {last_seq_id}")
+        pass
+
+    def get_cached_version(self, partition_id: int) -> int | None:
+        entry = self._cache.get(partition_id)
+        return entry[2] if entry is not None else None
 
     def clear_cache(self) -> None:
         self._cache = LRUCache(CACHE_SIZE)

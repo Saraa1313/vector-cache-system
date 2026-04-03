@@ -12,7 +12,7 @@ MINIO_BUCKET = "vector-index"
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 
 DIM = 128       
-N_CENTROIDS = 1000
+N_CENTROIDS = 10
 N_PROBE = [30]
 
 TOPK = 10
@@ -31,4 +31,5 @@ DYNAMODB_PORT          = 8000
 DYNAMODB_ENDPOINT      = f"http://{DYNAMODB_IP}:{DYNAMODB_PORT}"
 WAL_TABLE              = "WAL"
 META_TABLE             = "VectorIndexMeta"
+PARTITION_META_TABLE   = "PartitionMetadata"
 WORKER_POLL_INTERVAL_S = 1.0

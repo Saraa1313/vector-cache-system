@@ -2,11 +2,12 @@ syntax = "proto3";
 package vectorsearch;
 
 service VectorSearch {
-  rpc Search(SearchRequest)       returns (SearchResponse);
-  rpc Insert(InsertRequest)       returns (InsertResponse);
-  rpc Delete(DeleteRequest)       returns (DeleteResponse);
-  rpc Update(UpdateRequest)       returns (UpdateResponse);
-  rpc ClearCache(ClearCacheRequest) returns (ClearCacheResponse);
+  rpc Search(SearchRequest)               returns (SearchResponse);
+  rpc Insert(InsertRequest)               returns (InsertResponse);
+  rpc Delete(DeleteRequest)               returns (DeleteResponse);
+  rpc Update(UpdateRequest)               returns (UpdateResponse);
+  rpc ClearCache(ClearCacheRequest)       returns (ClearCacheResponse);
+  rpc NotifyBatchApplied(BatchAppliedNotification) returns (BatchAppliedAck);
 }
 
 message SearchRequest {
@@ -55,3 +56,10 @@ message UpdateResponse {
 
 message ClearCacheRequest  {}
 message ClearCacheResponse {}
+
+message BatchAppliedNotification {
+  int64          last_seq_id            = 1;
+  repeated int32 modified_partition_ids = 2;
+}
+
+message BatchAppliedAck {}

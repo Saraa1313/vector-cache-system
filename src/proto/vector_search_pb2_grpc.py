@@ -5,7 +5,7 @@ import warnings
 
 import vector_search_pb2 as vector__search__pb2
 
-GRPC_GENERATED_VERSION = '1.71.0'
+GRPC_GENERATED_VERSION = '1.80.0'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -18,7 +18,7 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + f' but the generated code in vector_search_pb2_grpc.py depends on'
+        + ' but the generated code in vector_search_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
@@ -59,6 +59,11 @@ class VectorSearchStub(object):
                 request_serializer=vector__search__pb2.ClearCacheRequest.SerializeToString,
                 response_deserializer=vector__search__pb2.ClearCacheResponse.FromString,
                 _registered_method=True)
+        self.NotifyBatchApplied = channel.unary_unary(
+                '/vectorsearch.VectorSearch/NotifyBatchApplied',
+                request_serializer=vector__search__pb2.BatchAppliedNotification.SerializeToString,
+                response_deserializer=vector__search__pb2.BatchAppliedAck.FromString,
+                _registered_method=True)
 
 
 class VectorSearchServicer(object):
@@ -94,6 +99,12 @@ class VectorSearchServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def NotifyBatchApplied(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_VectorSearchServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -121,6 +132,11 @@ def add_VectorSearchServicer_to_server(servicer, server):
                     servicer.ClearCache,
                     request_deserializer=vector__search__pb2.ClearCacheRequest.FromString,
                     response_serializer=vector__search__pb2.ClearCacheResponse.SerializeToString,
+            ),
+            'NotifyBatchApplied': grpc.unary_unary_rpc_method_handler(
+                    servicer.NotifyBatchApplied,
+                    request_deserializer=vector__search__pb2.BatchAppliedNotification.FromString,
+                    response_serializer=vector__search__pb2.BatchAppliedAck.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -258,6 +274,33 @@ class VectorSearch(object):
             '/vectorsearch.VectorSearch/ClearCache',
             vector__search__pb2.ClearCacheRequest.SerializeToString,
             vector__search__pb2.ClearCacheResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def NotifyBatchApplied(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/vectorsearch.VectorSearch/NotifyBatchApplied',
+            vector__search__pb2.BatchAppliedNotification.SerializeToString,
+            vector__search__pb2.BatchAppliedAck.FromString,
             options,
             channel_credentials,
             insecure,

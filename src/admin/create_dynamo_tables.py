@@ -5,7 +5,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import boto3
 from botocore.exceptions import ClientError
 
-from config import DYNAMODB_REGION, DYNAMODB_ENDPOINT, WAL_TABLE, META_TABLE
+from config import DYNAMODB_REGION, DYNAMODB_ENDPOINT, WAL_TABLE, META_TABLE, PARTITION_META_TABLE
 
 
 def create_table(client, name, key_schema, attribute_definitions):
@@ -56,6 +56,20 @@ def main():
         ],
         attribute_definitions=[
             {"AttributeName": "counter_id", "AttributeType": "S"},
+        ],
+    )
+
+    # PartitionMetadata table: PK=Partition_ID, SK=Version_ID
+    create_table(
+        client,
+        PARTITION_META_TABLE,
+        key_schema=[
+            {"AttributeName": "Partition_ID", "KeyType": "HASH"},
+            {"AttributeName": "Version_ID",   "KeyType": "RANGE"},
+        ],
+        attribute_definitions=[
+            {"AttributeName": "Partition_ID", "AttributeType": "N"},
+            {"AttributeName": "Version_ID",   "AttributeType": "N"},
         ],
     )
 
