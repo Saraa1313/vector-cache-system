@@ -39,10 +39,17 @@ class WALClient:
         self._wal.put_item(Item=item)
 
     def read_after(self, last_seq: int) -> list[dict]:
-        resp = self._wal.query(
+        kwargs = dict(
             KeyConditionExpression=(
                 Key("Query_Node_ID").eq(QUERY_NODE_ID) &
                 Key("seq_id").gt(last_seq)
             )
         )
-        return sorted(resp["Items"], key=lambda x: int(x["seq_id"]))
+        items = []
+        while True:
+            resp = self._wal.query(**kwargs)
+            items.extend(resp["Items"])
+            if "LastEvaluatedKey" not in resp:
+                break
+            kwargs["ExclusiveStartKey"] = resp["LastEvaluatedKey"]
+        return sorted(items, key=lambda x: int(x["seq_id"]))
