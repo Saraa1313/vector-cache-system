@@ -18,6 +18,7 @@ cleanup() {
     echo "Shutting down processes ..."
     kill "$NODE_PID" "$WORKER_PID" "$MINIO_PID" "$DYNAMO_PID" 2>/dev/null || true
     wait "$NODE_PID" "$WORKER_PID" "$MINIO_PID" "$DYNAMO_PID" 2>/dev/null || true
+    rm -rf $PROJECT_ROOT/worker_state.json
     echo "Cleanup done."
 }
 trap cleanup EXIT
