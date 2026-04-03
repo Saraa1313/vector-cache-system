@@ -47,6 +47,7 @@ class WorkerNode:
         self._part_meta = self._db.Table(PARTITION_META_TABLE)
 
         self.partition_version: dict[int, int] = {}
+        self.partition_size: dict[int, int] = {}
 
         print("Scanning MinIO to build id→centroid map...", flush=True)
         self.id_to_centroid: dict[int, int] = {}
@@ -55,6 +56,7 @@ class WorkerNode:
             for vid in ids:
                 self.id_to_centroid[int(vid)] = cid
             self.partition_version[cid] = version
+            self.partition_size[cid] = len(ids)
         print(f"  {len(self.id_to_centroid)} vectors indexed", flush=True)
 
         # Initialise the ID counter to max existing ID + 1
@@ -95,6 +97,7 @@ class WorkerNode:
                 "Number_of_Inserts":  0,
                 "Number_of_Updates":  0,
                 "Number_of_Deletes":  0,
+                "partition_size":     self.partition_size.get(cid, 0),
                 "fraction_vectors_touched_this_version": Decimal("0"),
                 "membership_change_count_this_version":  0,
                 "new_centroid":   centroid_vec,
@@ -125,6 +128,7 @@ class WorkerNode:
             "Number_of_Inserts":  inserts,
             "Number_of_Updates":  updates,
             "Number_of_Deletes":  deletes,
+            "partition_size":     len(ids),
             "fraction_vectors_touched_this_version": fraction,
             "membership_change_count_this_version":  membership_changes,
             "new_centroid":   centroid_vec,
@@ -251,9 +255,10 @@ class WorkerNode:
                     p_updates[new_cid] += 1
                     p_membership[new_cid] += 1
 
-        # Increment versions for all modified partitions before writing
+        # Increment versions and update sizes for all modified partitions before writing
         for cid in modified:
             self.partition_version[cid] = self.partition_version.get(cid, 1) + 1
+            self.partition_size[cid] = len(partitions[cid][0])
 
         self._write_partitions({cid: partitions[cid] for cid in modified})
 
