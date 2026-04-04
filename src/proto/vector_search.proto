@@ -57,9 +57,22 @@ message UpdateResponse {
 message ClearCacheRequest  {}
 message ClearCacheResponse {}
 
+message PartitionMetadataDelta {
+  int32          partition_id              = 1;
+  int32          version_id               = 2;
+  int32          number_of_inserts        = 3;
+  int32          number_of_updates        = 4;
+  int32          number_of_deletes        = 5;
+  int32          partition_size           = 6;
+  float          fraction_vectors_touched = 7;
+  int32          membership_change_count  = 8;
+  repeated float new_centroid             = 9;
+  float          reconstruction_error     = 10;
+}
+
 message BatchAppliedNotification {
-  int64          last_seq_id            = 1;
-  repeated int32 modified_partition_ids = 2;
+  int64                           last_seq_id      = 1;
+  repeated PartitionMetadataDelta partition_deltas = 2;
 }
 
 message BatchAppliedAck {}

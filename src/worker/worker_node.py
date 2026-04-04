@@ -51,12 +51,14 @@ class WorkerNode:
 
         print("Scanning MinIO to build id→centroid map...", flush=True)
         self.id_to_centroid: dict[int, int] = {}
+        _init_vecs: dict[int, np.ndarray] = {}
         for cid in self.store.list_centroid_ids():
-            ids, _, version = self.store.load_centroid(cid)
+            ids, vecs, version = self.store.load_centroid(cid)
             for vid in ids:
                 self.id_to_centroid[int(vid)] = cid
             self.partition_version[cid] = version
             self.partition_size[cid] = len(ids)
+            _init_vecs[cid] = vecs
         print(f"  {len(self.id_to_centroid)} vectors indexed", flush=True)
 
         # Initialise the ID counter to max existing ID + 1
@@ -74,7 +76,7 @@ class WorkerNode:
                 pass
 
         # Write current partition versions to DynamoDB metadata table
-        self._init_partition_metadata()
+        self._init_partition_metadata(_init_vecs)
 
         # Load last applied sequence number
         self.last_applied_seq: int = 0
@@ -84,13 +86,21 @@ class WorkerNode:
         print(f"  Resuming from seq_id > {self.last_applied_seq}", flush=True)
 
 
-    def _init_partition_metadata(self):
+    def _reconstruction_error(self, cid: int, vecs: np.ndarray) -> float:
+        if len(vecs) == 0:
+            return 0.0
+        diffs = vecs - self.centroids[cid]
+        return float(np.mean(np.sqrt(np.sum(diffs ** 2, axis=1))))
+
+    def _init_partition_metadata(self, partition_vecs: dict[int, np.ndarray]):
         n_centroids = len(self.centroids)
         print(f"Initialising partition metadata for {n_centroids} partitions ...", flush=True)
 
         def _write_one(cid):
             version = self.partition_version.get(cid, 1)
             centroid_vec = [Decimal(str(float(x))) for x in self.centroids[cid]]
+            vecs = partition_vecs.get(cid, np.zeros((0, self.centroids.shape[1]), dtype=np.float32))
+            recon_error = self._reconstruction_error(cid, vecs)
             self._part_meta.put_item(Item={
                 "Partition_ID":   cid,
                 "Version_ID":     version,
@@ -101,6 +111,7 @@ class WorkerNode:
                 "fraction_vectors_touched_this_version": Decimal("0"),
                 "membership_change_count_this_version":  0,
                 "new_centroid":   centroid_vec,
+                "reconstruction_error": Decimal(str(round(recon_error, 6))),
             })
 
         with ThreadPoolExecutor(max_workers=32) as executor:
@@ -112,7 +123,8 @@ class WorkerNode:
 
     def _write_partition_metadata(self, cid: int, ids: np.ndarray, vecs: np.ndarray,
                                   inserts: int, updates: int, deletes: int,
-                                  membership_changes: int, size_before: int):
+                                  membership_changes: int, size_before: int,
+                                  recon_error: float):
         version = self.partition_version[cid]
 
         touched = updates + deletes
@@ -132,6 +144,7 @@ class WorkerNode:
             "fraction_vectors_touched_this_version": fraction,
             "membership_change_count_this_version":  membership_changes,
             "new_centroid":   centroid_vec,
+            "reconstruction_error": Decimal(str(round(recon_error, 6))),
         })
 
 
@@ -262,6 +275,12 @@ class WorkerNode:
 
         self._write_partitions({cid: partitions[cid] for cid in modified})
 
+        # Compute reconstruction error once per modified partition after all mutations
+        recon_errors: dict[int, float] = {
+            cid: self._reconstruction_error(cid, partitions[cid][1])
+            for cid in modified
+        }
+
         # Write DynamoDB metadata for each modified partition in parallel
         with ThreadPoolExecutor(max_workers=len(modified)) as executor:
             for cid in modified:
@@ -271,6 +290,7 @@ class WorkerNode:
                     cid, ids, vecs,
                     p_inserts[cid], p_updates[cid], p_deletes[cid], p_membership[cid],
                     partition_size_before.get(cid, 0),
+                    recon_errors[cid],
                 )
 
         last_seq = int(entries[-1]["seq_id"])
@@ -290,12 +310,32 @@ class WorkerNode:
                   f"  ins={p_inserts[cid]} upd={p_updates[cid]} del={p_deletes[cid]}"
                   f"  membership_changes={p_membership[cid]}"
                   f"  frac_touched={fraction:.4f}%"
-                  f"  centroid_norm={centroid_norm:.4f}", flush=True)
+                  f"  centroid_norm={centroid_norm:.4f}"
+                  f"  recon_error={recon_errors[cid]:.4f}", flush=True)
 
         try:
+            deltas = []
+            for cid in modified:
+                ids, vecs = partitions[cid]
+                size_before = partition_size_before.get(cid, 0)
+                touched = p_updates[cid] + p_deletes[cid]
+                fraction = float(round(100.0 * touched / size_before, 4)) if size_before > 0 else 0.0
+                new_centroid = np.mean(vecs, axis=0) if len(vecs) > 0 else np.zeros(self.centroids.shape[1], dtype=np.float32)
+                deltas.append(pb2.PartitionMetadataDelta(
+                    partition_id=cid,
+                    version_id=self.partition_version[cid],
+                    number_of_inserts=p_inserts[cid],
+                    number_of_updates=p_updates[cid],
+                    number_of_deletes=p_deletes[cid],
+                    partition_size=len(ids),
+                    fraction_vectors_touched=fraction,
+                    membership_change_count=p_membership[cid],
+                    new_centroid=new_centroid.tolist(),
+                    reconstruction_error=recon_errors[cid],
+                ))
             self._qnode_stub.NotifyBatchApplied(pb2.BatchAppliedNotification(
                 last_seq_id=last_seq,
-                modified_partition_ids=list(modified),
+                partition_deltas=deltas,
             ))
         except grpc.RpcError as e:
             print(f"  Warning: could not notify query node: {e}", flush=True)

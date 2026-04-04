@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from config import N_PROBE, CENTROIDS_PATH, CACHE_SIZE
 from query.lru_cache import LRUCache
+from query.recall_policy import RecallAwarePolicy, PolicyConfig
 from storage.object_store import ObjectStore
 from storage.wal import WALClient
 
@@ -25,6 +26,9 @@ class QueryNode:
         self._centroid_index.add(np.ascontiguousarray(self.centroids))
 
         self._cache = LRUCache(CACHE_SIZE)
+        self._freshness: dict[int, dict] = {}
+        self._freshness_lock = threading.Lock()
+        self._policy = RecallAwarePolicy()
         print("Query node ready", flush=True)
 
     def _nearest_centroid(self, vector: np.ndarray) -> int:
@@ -41,27 +45,40 @@ class QueryNode:
         centroid_search_ms = (time.perf_counter() - t0) * 1000
 
         t1 = time.perf_counter()
-        # Split probe_ids into cache hits and misses
         entries: dict[int, tuple] = {}
-        miss_ids = []
-        for cid in probe_ids:
-            entry = self._cache.get(int(cid))
-            if entry is not None:
-                entries[int(cid)] = entry
-            else:
-                miss_ids.append(int(cid))
-        cache_hits = len(probe_ids) - len(miss_ids)
+        fetch_ids = []  # partitions to fetch from MinIO (not cached, or policy says stale)
 
-        # Fetch all misses in parallel; cache entry is (ids, vecs, version)
-        if miss_ids:
-            with ThreadPoolExecutor(max_workers=len(miss_ids)) as executor:
+        with self._freshness_lock:
+            for rank, cid in enumerate(probe_ids, start=1):
+                cid = int(cid)
+                entry = self._cache.get(cid)
+                if entry is None:
+                    # Not in cache — must fetch
+                    fetch_ids.append(cid)
+                else:
+                    f = self._freshness.get(cid)
+                    if f is None:
+                        # In cache but no freshness entry — use cache conservatively
+                        entries[cid] = entry
+                    else:
+                        fetch, _ = self._policy.should_fetch(f, probe_rank=rank)
+                        if fetch:
+                            fetch_ids.append(cid)
+                        else:
+                            entries[cid] = entry
+
+        cache_hits = len(probe_ids) - len(fetch_ids)
+
+        if fetch_ids:
+            with ThreadPoolExecutor(max_workers=len(fetch_ids)) as executor:
                 futures = {executor.submit(self.store.load_centroid, cid): cid
-                           for cid in miss_ids}
+                           for cid in fetch_ids}
                 for future in as_completed(futures):
                     cid = futures[future]
                     ids, vecs, version = future.result()
                     self._cache.put(cid, (ids, vecs, version))
                     entries[cid] = (ids, vecs, version)
+                    self._init_freshness(cid, version, partition_size=len(ids))
 
         candidate_ids = [entries[int(cid)][0] for cid in probe_ids]
         candidate_vecs = [entries[int(cid)][1] for cid in probe_ids]
@@ -91,9 +108,45 @@ class QueryNode:
         self._wal.write(self._next_seq(), "delete", vector_id=vector_id)
         return True
 
-    def on_batch_applied(self, modified_partition_ids: list[int], last_seq_id: int) -> None:
-        print(f"Query node received batch applied: {modified_partition_ids} {last_seq_id}")
-        pass
+    def _init_freshness(self, cid: int, cached_version: int, partition_size: int) -> None:
+        with self._freshness_lock:
+            self._freshness[cid] = {
+                "cached_version":                       cached_version,
+                "latest_known_version":                 cached_version,
+                "cumulative_inserts_since_cache":       0,
+                "cumulative_updates_since_cache":       0,
+                "cumulative_deletes_since_cache":       0,
+                "cumulative_membership_changes_since_cache": 0,
+                "latest_partition_size":                partition_size,
+                "latest_fraction_vectors_touched":      None,
+                "latest_reconstruction_error":          None,
+                "latest_centroid":                      None,
+                "last_metadata_update_time":            None,
+            }
+
+    def on_batch_applied(self, partition_deltas: list, last_seq_id: int) -> None:
+        with self._freshness_lock:
+            for delta in partition_deltas:
+                cid = delta.partition_id
+                if cid not in self._freshness:
+                    # partition not cached — nothing to track yet
+                    continue
+                f = self._freshness[cid]
+                if delta.version_id <= f["latest_known_version"]:
+                    continue  # duplicate or out-of-order notification
+                # accumulate deltas since cached version
+                f["cumulative_inserts_since_cache"]             += delta.number_of_inserts
+                f["cumulative_updates_since_cache"]             += delta.number_of_updates
+                f["cumulative_deletes_since_cache"]             += delta.number_of_deletes
+                f["cumulative_membership_changes_since_cache"]  += delta.membership_change_count
+                # overwrite latest snapshot fields
+                f["latest_known_version"]           = delta.version_id
+                f["latest_partition_size"]          = delta.partition_size
+                f["latest_fraction_vectors_touched"]= delta.fraction_vectors_touched
+                f["latest_reconstruction_error"]    = delta.reconstruction_error
+                f["latest_centroid"]                = list(delta.new_centroid)
+                f["last_metadata_update_time"]      = time.time()
+        print(f"Query node received batch applied: seq={last_seq_id} partitions={[d.partition_id for d in partition_deltas]}", flush=True)
 
     def get_cached_version(self, partition_id: int) -> int | None:
         entry = self._cache.get(partition_id)
@@ -101,6 +154,8 @@ class QueryNode:
 
     def clear_cache(self) -> None:
         self._cache = LRUCache(CACHE_SIZE)
+        with self._freshness_lock:
+            self._freshness.clear()
 
     def update(self, vector_id: int, new_vector: np.ndarray) -> bool:
         self._wal.write(self._next_seq(), "update", vector=new_vector, vector_id=vector_id)
