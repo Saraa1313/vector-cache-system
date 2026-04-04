@@ -41,7 +41,7 @@ class QueryNode:
 
         t0 = time.perf_counter()
         _, I = self._centroid_index.search(q, n_probe)
-        probe_ids = I[0]
+        probe_ids = [int(cid) for cid in I[0] if cid >= 0]
         centroid_search_ms = (time.perf_counter() - t0) * 1000
 
         t1 = time.perf_counter()
@@ -147,6 +147,17 @@ class QueryNode:
                 f["latest_centroid"]                = list(delta.new_centroid)
                 f["last_metadata_update_time"]      = time.time()
         print(f"Query node received batch applied: seq={last_seq_id} partitions={[d.partition_id for d in partition_deltas]}", flush=True)
+        with self._freshness_lock:
+            for cid, f in sorted(self._freshness.items()):
+                print(f"  [freshness] cid={cid}"
+                      f"  cached_ver={f['cached_version']}"
+                      f"  latest_ver={f['latest_known_version']}"
+                      f"  cum_ins={f['cumulative_inserts_since_cache']}"
+                      f"  cum_upd={f['cumulative_updates_since_cache']}"
+                      f"  cum_del={f['cumulative_deletes_since_cache']}"
+                      f"  cum_mem={f['cumulative_membership_changes_since_cache']}"
+                      f"  size={f['latest_partition_size']}"
+                      f"  re={f['latest_reconstruction_error']}", flush=True)
 
     def get_cached_version(self, partition_id: int) -> int | None:
         entry = self._cache.get(partition_id)

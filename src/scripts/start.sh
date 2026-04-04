@@ -57,3 +57,6 @@ python src/client/insert_client.py 10
 sleep 5
 python src/client/delete_client.py 1000001 1000020
 sleep 5
+
+echo "System running. Press Ctrl+C to stop."
+wait
