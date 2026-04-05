@@ -4,22 +4,22 @@ from typing import Optional
 
 @dataclass
 class PolicyConfig:
-    # Staleness score weights (should sum to 1.0)
-    w_mutation: float = 0.40        # (updates + deletes) / partition_size since cache
-    w_insert: float = 0.10          # inserts / partition_size since cache
-    w_membership: float = 0.25      # membership changes / partition_size since cache
-    w_version_lag: float = 0.15     # version drift
-    w_reconstruction: float = 0.10  # structural drift via reconstruction error
+    # Staleness score weights (b1..b5)
+    w_version_lag: float = 0.158    # b1: version drift
+    w_mutation: float = 0.032       # b2: (updates + deletes) / partition_size since cache
+    w_update: float = 0.180         # b3: updates / partition_size since cache
+    w_delete: float = 0.180         # b4: deletes / partition_size since cache
+    w_reconstruction: float = 0.450 # b5: structural drift via reconstruction error
 
     # Fetch if risk >= this threshold
-    fetch_threshold: float = 0.15
+    fetch_threshold: float = 0.0046
 
     # Normalization caps
     max_version_lag_for_norm: int = 10
     max_reconstruction_error_for_norm: float = 500.0  # tuned for SIFT1M RMSE (~300-400 typical)
 
-    # importance = 1 / rank^gamma (rank 1 = closest centroid)
-    importance_gamma: float = 1.0
+    # n_probe needed for importance normalization
+    n_probe: int = 10
 
     eps: float = 1e-9
 
@@ -42,8 +42,8 @@ class RecallAwarePolicy:
         return max(0.0, min(1.0, x))
 
     def _importance(self, probe_rank: int) -> float:
-        """Rank 1 = closest centroid = highest importance."""
-        return 1.0 / (max(probe_rank, 1) ** self.config.importance_gamma)
+        """Rank 1 = closest centroid = lowest importance. Farther partitions matter more for recall."""
+        return probe_rank / max(self.config.n_probe, 1)
 
     def compute_staleness_score(self, f: dict) -> float:
         """
@@ -57,20 +57,20 @@ class RecallAwarePolicy:
 
         denom = max(float(f["latest_partition_size"] or 0), cfg.eps)
 
-        mutation_fraction   = (f["cumulative_updates_since_cache"] + f["cumulative_deletes_since_cache"]) / denom
-        insert_fraction     = f["cumulative_inserts_since_cache"] / denom
-        membership_fraction = f["cumulative_membership_changes_since_cache"] / denom
-        version_lag         = max(0, f["latest_known_version"] - f["cached_version"])
-        re                  = f["latest_reconstruction_error"] or 0.0
+        mutation_fraction = (f["cumulative_updates_since_cache"] + f["cumulative_deletes_since_cache"]) / denom
+        update_fraction   = f["cumulative_updates_since_cache"] / denom
+        delete_fraction   = f["cumulative_deletes_since_cache"] / denom
+        version_lag       = max(0, f["latest_known_version"] - f["cached_version"])
+        re                = f["latest_reconstruction_error"] or 0.0
 
         norm_version_lag = self._clamp01(version_lag / max(cfg.max_version_lag_for_norm, 1))
         norm_re          = self._clamp01(re / max(cfg.max_reconstruction_error_for_norm, cfg.eps))
 
         score = (
-            cfg.w_mutation       * self._clamp01(mutation_fraction) +
-            cfg.w_insert         * self._clamp01(insert_fraction) +
-            cfg.w_membership     * self._clamp01(membership_fraction) +
             cfg.w_version_lag    * norm_version_lag +
+            cfg.w_mutation       * self._clamp01(mutation_fraction) +
+            cfg.w_update         * self._clamp01(update_fraction) +
+            cfg.w_delete         * self._clamp01(delete_fraction) +
             cfg.w_reconstruction * norm_re
         )
         return self._clamp01(score)

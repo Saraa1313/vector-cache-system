@@ -28,7 +28,7 @@ class QueryNode:
         self._cache = LRUCache(CACHE_SIZE)
         self._freshness: dict[int, dict] = {}
         self._freshness_lock = threading.Lock()
-        self._policy = RecallAwarePolicy()
+        self._policy = RecallAwarePolicy(PolicyConfig(n_probe=_DEFAULT_N_PROBE))
         print("Query node ready", flush=True)
 
     def _nearest_centroid(self, vector: np.ndarray) -> int:
