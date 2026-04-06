@@ -49,14 +49,15 @@ python src/worker/start_worker_node.py &
 WORKER_PID=$!
 sleep 5
 
+echo "Generating update workload ..."
+python src/admin/gen_gt_update_workload.py --queries src/client/concentrated_queries_top10.csv --topk 2 --out data/gt_update_workload.csv 
+
 echo "Running client ..."
-# python src/client/client.py
-python src/client/insert_client.py 10
-sleep 5
-python src/client/insert_client.py 10
-sleep 5
-python src/client/delete_client.py 1000001 1000020
-sleep 5
+python src/client/client.py --queries src/client/concentrated_queries_top10.csv  
+python src/client/update_client.py --csv data/gt_update_workload.csv   
+sleep 15   
+python src/admin/compute_ground_truth.py --queries src/client/concentrated_queries_top10.csv 
+python src/client/client.py --queries src/client/concentrated_queries_top10.csv --gt data/sift/current_groundtruth.npy --no-clear-cache    
 
 echo "System running. Press Ctrl+C to stop."
 wait

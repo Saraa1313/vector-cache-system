@@ -305,13 +305,13 @@ class WorkerNode:
             fraction = round(100.0 * touched / size_before, 4) if size_before > 0 else 0.0
             new_centroid = np.mean(vecs, axis=0) if len(vecs) > 0 else np.zeros(vecs.shape[1])
             centroid_norm = float(np.linalg.norm(new_centroid))
-            print(f"    cid={cid:04d}  ver={self.partition_version[cid]}"
-                  f"  size_before={size_before} size_after={len(ids)}"
-                  f"  ins={p_inserts[cid]} upd={p_updates[cid]} del={p_deletes[cid]}"
-                  f"  membership_changes={p_membership[cid]}"
-                  f"  frac_touched={fraction:.4f}%"
-                  f"  centroid_norm={centroid_norm:.4f}"
-                  f"  recon_error={recon_errors[cid]:.4f}", flush=True)
+            # print(f"    cid={cid:04d}  ver={self.partition_version[cid]}"
+            #       f"  size_before={size_before} size_after={len(ids)}"
+            #       f"  ins={p_inserts[cid]} upd={p_updates[cid]} del={p_deletes[cid]}"
+            #       f"  membership_changes={p_membership[cid]}"
+            #       f"  frac_touched={fraction:.4f}%"
+            #       f"  centroid_norm={centroid_norm:.4f}"
+            #       f"  recon_error={recon_errors[cid]:.4f}", flush=True)
 
         try:
             deltas = []
