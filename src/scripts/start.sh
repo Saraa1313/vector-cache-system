@@ -48,8 +48,9 @@ WORKER_PID=$!
 sleep 2
 
 echo "Running client ..."
-python src/client/client.py
-# python src/client/insert_client.py 10
-# sleep 5
-# python src/client/insert_client.py 10
-# sleep 5
+python src/client/client.py --queries src/client/concentrated_queries.csv
+python src/client/update_client.py --csv src/client/update_workload.csv --limit 500
+sleep 10
+python src/admin/compute_ground_truth.py --queries src/client/concentrated_queries.csv
+sleep 5
+python src/client/client.py --queries src/client/concentrated_queries.csv --gt data/sift/current_groundtruth.npy
