@@ -67,21 +67,38 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--gt", default=None,
                         help="Path to ground truth .npy file (overrides sift_groundtruth.ivecs)")
+    parser.add_argument("--queries", default=None,
+                        help="Path to CSV with query_idx column to select specific queries")
+    parser.add_argument("--no-clear-cache", action="store_true",
+                        help="Skip ClearCache RPC before each nprobe sweep (use to measure stale-cache recall)")
     args = parser.parse_args()
 
-    queries = read_fvecs(os.path.join(DATA_DIR, "sift", "sift_query.fvecs"))[:NUMBER_OF_QUERIES]
+    import csv
+    all_queries = read_fvecs(os.path.join(DATA_DIR, "sift", "sift_query.fvecs"))
+
+    if args.queries:
+        with open(args.queries) as f:
+            indices = [int(row["query_idx"]) for row in csv.DictReader(f)]
+        queries = all_queries[indices]
+        print(f"Using {len(indices)} queries from {args.queries}")
+    else:
+        indices = list(range(NUMBER_OF_QUERIES))
+        queries = all_queries[:NUMBER_OF_QUERIES]
+
     if args.gt:
-        gt = np.load(args.gt)[:NUMBER_OF_QUERIES]
+        gt = np.load(args.gt)   # already aligned with selected queries
         print(f"Using ground truth: {args.gt}")
     else:
-        gt = read_ivecs(os.path.join(DATA_DIR, "sift", "sift_groundtruth.ivecs"))[:NUMBER_OF_QUERIES]
-    print(f"Running {NUMBER_OF_QUERIES} queries for nprobe values: {N_PROBE}")
+        all_gt = read_ivecs(os.path.join(DATA_DIR, "sift", "sift_groundtruth.ivecs"))
+        gt = all_gt[indices]
+    print(f"Running {len(queries)} queries for nprobe values: {N_PROBE}")
 
     channel = grpc.insecure_channel(f"{QUERY_NODE_HOST}:{GRPC_PORT}")
     stub = pb2_grpc.VectorSearchStub(channel)
 
     for nprobe in N_PROBE:
-        stub.ClearCache(pb2.ClearCacheRequest())
+        if not args.no_clear_cache:
+            stub.ClearCache(pb2.ClearCacheRequest())
         run_nprobe(stub, queries, gt, nprobe)
 
 
