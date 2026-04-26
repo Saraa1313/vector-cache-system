@@ -1,0 +1,136 @@
+{
+  "mode": "classifier",
+  "scale_pos_weight": 17.94,
+  "threshold_sweep": {
+    "0.1": {
+      "precision": 0.1028,
+      "recall": 0.971,
+      "f1": 0.1858,
+      "n_true_pos": 4994,
+      "n_pred_pos": 47192
+    },
+    "0.2": {
+      "precision": 0.1496,
+      "recall": 0.9327,
+      "f1": 0.2578,
+      "n_true_pos": 4994,
+      "n_pred_pos": 31140
+    },
+    "0.3": {
+      "precision": 0.192,
+      "recall": 0.9019,
+      "f1": 0.3166,
+      "n_true_pos": 4994,
+      "n_pred_pos": 23455
+    },
+    "0.4": {
+      "precision": 0.2301,
+      "recall": 0.8606,
+      "f1": 0.3631,
+      "n_true_pos": 4994,
+      "n_pred_pos": 18678
+    },
+    "0.5": {
+      "precision": 0.2713,
+      "recall": 0.8204,
+      "f1": 0.4078,
+      "n_true_pos": 4994,
+      "n_pred_pos": 15100
+    },
+    "0.6": {
+      "precision": 0.3192,
+      "recall": 0.7801,
+      "f1": 0.453,
+      "n_true_pos": 4994,
+      "n_pred_pos": 12205
+    },
+    "0.7": {
+      "precision": 0.3825,
+      "recall": 0.7151,
+      "f1": 0.4984,
+      "n_true_pos": 4994,
+      "n_pred_pos": 9337
+    },
+    "0.8": {
+      "precision": 0.4832,
+      "recall": 0.6221,
+      "f1": 0.5439,
+      "n_true_pos": 4994,
+      "n_pred_pos": 6430
+    },
+    "0.9": {
+      "precision": 0.6455,
+      "recall": 0.4481,
+      "f1": 0.529,
+      "n_true_pos": 4994,
+      "n_pred_pos": 3467
+    }
+  },
+  "best_threshold": 0.8,
+  "threshold_metrics": {
+    "precision": 0.4832,
+    "recall": 0.6221,
+    "f1": 0.5439,
+    "n_true_pos": 4994,
+    "n_pred_pos": 6430
+  },
+  "n_train": 377596,
+  "n_test": 94400,
+  "nonzero_frac_train": 0.052786576128984415,
+  "nonzero_frac_test": 0.052902542372881355,
+  "best_iteration": 499,
+  "ood_rank_targeted": {
+    "close_rank": {
+      "n": 1494,
+      "nonzero_frac": 0.1084,
+      "threshold_metrics": {
+        "precision": 0.5189,
+        "recall": 0.8457,
+        "f1": 0.6432,
+        "n_true_pos": 162,
+        "n_pred_pos": 264
+      }
+    },
+    "mid_rank": {
+      "n": 1799,
+      "nonzero_frac": 0.0706,
+      "threshold_metrics": {
+        "precision": 0.4221,
+        "recall": 0.6614,
+        "f1": 0.5153,
+        "n_true_pos": 127,
+        "n_pred_pos": 199
+      }
+    },
+    "late_rank": {
+      "n": 1606,
+      "nonzero_frac": 0.0511,
+      "threshold_metrics": {
+        "precision": 0.3985,
+        "recall": 0.6463,
+        "f1": 0.493,
+        "n_true_pos": 82,
+        "n_pred_pos": 133
+      }
+    }
+  },
+  "feature_importance": {
+    "normalized_probe_rank": 0.40046077966690063,
+    "probe_rank": 0.25925204157829285,
+    "mutation_fraction": 0.09293266385793686,
+    "version_lag": 0.039720259606838226,
+    "candidate_fraction": 0.029238523915410042,
+    "partition_size": 0.022832931950688362,
+    "recon_error_stale": 0.02243121713399887,
+    "gap_to_prev_centroid": 0.021888367831707,
+    "rel_gap_to_next": 0.020977502688765526,
+    "centroid_dist": 0.020910702645778656,
+    "gap_to_next_centroid": 0.01932704821228981,
+    "recon_error_delta": 0.018146848306059837,
+    "update_fraction": 0.016264401376247406,
+    "delete_fraction": 0.015616677701473236
+  },
+  "elapsed_seconds": 12.5,
+  "csv_path": "/Users/saraagarwal/vector-cache-prototype/data/training_data/sift1m_recall_drop_v10.csv",
+  "model_path": "/Users/saraagarwal/vector-cache-prototype/models/sift1m_recall_drop_v10_xgb_clf.ubj"
+}

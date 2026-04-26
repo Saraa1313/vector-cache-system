@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from config import N_PROBE, CENTROIDS_PATH, CACHE_SIZE
 from query.lru_cache import LRUCache
-from query.recall_policy import RecallAwarePolicy, PolicyConfig
+from query.recall_policy import RecallAwarePolicy, LearnedPolicy, PolicyConfig
 from storage.object_store import ObjectStore
 from storage.wal import WALClient
 
@@ -14,7 +14,7 @@ _DEFAULT_N_PROBE = N_PROBE[0] if isinstance(N_PROBE, list) else N_PROBE
 
 
 class QueryNode:
-    def __init__(self):
+    def __init__(self, model_path: str | None = None, use_learned_policy: bool = False):
         self.centroids = np.load(CENTROIDS_PATH)
         self.store = ObjectStore()
         self._wal = WALClient()
@@ -28,7 +28,16 @@ class QueryNode:
         self._cache = LRUCache(CACHE_SIZE)
         self._freshness: dict[int, dict] = {}
         self._freshness_lock = threading.Lock()
+        self._hit_rate_ema: dict[int, float] = {}  # per-partition EMA of top-k contribution
+        self._hit_rate_alpha = 0.1
         self._policy = RecallAwarePolicy(PolicyConfig(n_probe=_DEFAULT_N_PROBE))
+
+        self._learned_policy: LearnedPolicy | None = None
+        if model_path is not None:
+            self._learned_policy = LearnedPolicy(
+                model_path, n_probe=_DEFAULT_N_PROBE
+            )
+        self._use_learned_policy = use_learned_policy and (self._learned_policy is not None)
         print("Query node ready", flush=True)
 
     def _nearest_centroid(self, vector: np.ndarray) -> int:
@@ -40,8 +49,9 @@ class QueryNode:
         q = np.ascontiguousarray(query.reshape(1, -1).astype(np.float32))
 
         t0 = time.perf_counter()
-        _, I = self._centroid_index.search(q, n_probe)
+        D, I = self._centroid_index.search(q, n_probe)
         probe_ids = [int(cid) for cid in I[0] if cid >= 0]
+        centroid_dists = [float(D[0][i]) for i in range(len(probe_ids))]
         centroid_search_ms = (time.perf_counter() - t0) * 1000
 
         t1 = time.perf_counter()
@@ -49,6 +59,11 @@ class QueryNode:
         fetch_ids = []  # partitions to fetch from MinIO (not cached, or policy says stale)
 
         with self._freshness_lock:
+            total_probe_size = sum(
+                self._freshness[c]["latest_partition_size"]
+                for c in probe_ids
+                if c in self._freshness
+            )
             for rank, cid in enumerate(probe_ids, start=1):
                 cid = int(cid)
                 entry = self._cache.get(cid)
@@ -61,7 +76,25 @@ class QueryNode:
                         # In cache but no freshness entry — use cache conservatively
                         entries[cid] = entry
                     else:
-                        fetch, _ = self._policy.should_fetch(f, probe_rank=rank)
+                        candidate_fraction = (
+                            f["latest_partition_size"] / max(total_probe_size, 1)
+                        )
+                        fetch, diag = self._policy.should_fetch(
+                            f, probe_rank=rank,
+                            candidate_fraction=candidate_fraction,
+                            centroid_distances=centroid_dists,
+                        )
+                        # Shadow mode: run learned policy on every query for logging,
+                        # but only act on its decision when use_learned_policy=True.
+                        if self._learned_policy is not None:
+                            lp_fetch, lp_diag = self._learned_policy.should_fetch(
+                                f, probe_rank=rank,
+                                candidate_fraction=candidate_fraction,
+                                centroid_distances=centroid_dists,
+                            )
+                            if self._use_learned_policy:
+                                fetch = lp_fetch
+                                diag  = lp_diag
                         if fetch:
                             fetch_ids.append(cid)
                         else:
@@ -78,7 +111,9 @@ class QueryNode:
                     ids, vecs, version = future.result()
                     self._cache.put(cid, (ids, vecs, version))
                     entries[cid] = (ids, vecs, version)
-                    self._init_freshness(cid, version, partition_size=len(ids))
+                    cached_re = self._recon_error(cid, vecs)
+                    self._init_freshness(cid, version, partition_size=len(ids),
+                                        cached_reconstruction_error=cached_re)
 
         candidate_ids = [entries[int(cid)][0] for cid in probe_ids]
         candidate_vecs = [entries[int(cid)][1] for cid in probe_ids]
@@ -92,7 +127,36 @@ class QueryNode:
         scan_ms = (time.perf_counter() - t2) * 1000
 
         results = [{"id": int(candidate_ids[i]), "distance": float(dists[i])} for i in top_idx]
+
+        # Update per-partition hit rate EMA: did this partition contribute to the top-k?
+        result_id_set = {r["id"] for r in results}
+        contributing_cids: set[int] = set()
+        for cid in probe_ids:
+            cid = int(cid)
+            if cid in entries:
+                for vid in entries[cid][0]:
+                    if int(vid) in result_id_set:
+                        contributing_cids.add(cid)
+                        break
+        alpha = self._hit_rate_alpha
+        with self._freshness_lock:
+            for cid in probe_ids:
+                cid = int(cid)
+                hit = 1.0 if cid in contributing_cids else 0.0
+                ema = self._hit_rate_ema.get(cid, 0.0)
+                self._hit_rate_ema[cid] = (1 - alpha) * ema + alpha * hit
+                if cid in self._freshness:
+                    self._freshness[cid]["historical_hit_rate"] = round(self._hit_rate_ema[cid], 4)
+
         return results, centroid_search_ms, fetch_ms, scan_ms, cache_hits
+
+    def _recon_error(self, cid: int, vecs: np.ndarray) -> float:
+        """Mean L2 distance from partition vectors to their centroid."""
+        if len(vecs) == 0:
+            return 0.0
+        centroid = self.centroids[cid].astype(np.float32)
+        diffs = vecs.astype(np.float32) - centroid
+        return float(np.mean(np.sqrt(np.sum(diffs ** 2, axis=1))))
 
     def _next_seq(self) -> int:
         with self._seq_lock:
@@ -108,7 +172,8 @@ class QueryNode:
         self._wal.write(self._next_seq(), "delete", vector_id=vector_id)
         return True
 
-    def _init_freshness(self, cid: int, cached_version: int, partition_size: int) -> None:
+    def _init_freshness(self, cid: int, cached_version: int, partition_size: int,
+                        cached_reconstruction_error: float = 0.0) -> None:
         with self._freshness_lock:
             self._freshness[cid] = {
                 "cached_version":                       cached_version,
@@ -120,8 +185,10 @@ class QueryNode:
                 "latest_partition_size":                partition_size,
                 "latest_fraction_vectors_touched":      None,
                 "latest_reconstruction_error":          None,
+                "cached_reconstruction_error":          cached_reconstruction_error,
                 "latest_centroid":                      None,
                 "last_metadata_update_time":            None,
+                "historical_hit_rate":                  self._hit_rate_ema.get(cid, 0.0),
             }
 
     def on_batch_applied(self, partition_deltas: list, last_seq_id: int) -> None:

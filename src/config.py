@@ -13,7 +13,7 @@ DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 
 DIM = 128       
 N_CENTROIDS = 1024
-N_PROBE = [20]
+N_PROBE = [32]
 
 TOPK = 10
 CACHE_SIZE = 200   # max centroid objects held in memory

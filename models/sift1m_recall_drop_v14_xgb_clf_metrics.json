@@ -1,0 +1,197 @@
+{
+  "mode": "classifier",
+  "scale_pos_weight": 24.56,
+  "threshold_sweep": {
+    "0.1": {
+      "precision": 0.4966,
+      "recall": 0.9702,
+      "f1": 0.657,
+      "n_true_pos": 907,
+      "n_pred_pos": 1772
+    },
+    "0.15": {
+      "precision": 0.5285,
+      "recall": 0.9614,
+      "f1": 0.682,
+      "n_true_pos": 907,
+      "n_pred_pos": 1650
+    },
+    "0.2": {
+      "precision": 0.5589,
+      "recall": 0.9526,
+      "f1": 0.7044,
+      "n_true_pos": 907,
+      "n_pred_pos": 1546
+    },
+    "0.25": {
+      "precision": 0.5848,
+      "recall": 0.9504,
+      "f1": 0.7241,
+      "n_true_pos": 907,
+      "n_pred_pos": 1474
+    },
+    "0.3": {
+      "precision": 0.6044,
+      "recall": 0.9449,
+      "f1": 0.7372,
+      "n_true_pos": 907,
+      "n_pred_pos": 1418
+    },
+    "0.35": {
+      "precision": 0.6207,
+      "recall": 0.9383,
+      "f1": 0.7471,
+      "n_true_pos": 907,
+      "n_pred_pos": 1371
+    },
+    "0.4": {
+      "precision": 0.6389,
+      "recall": 0.9305,
+      "f1": 0.7576,
+      "n_true_pos": 907,
+      "n_pred_pos": 1321
+    },
+    "0.45": {
+      "precision": 0.6549,
+      "recall": 0.9184,
+      "f1": 0.7646,
+      "n_true_pos": 907,
+      "n_pred_pos": 1272
+    },
+    "0.5": {
+      "precision": 0.6686,
+      "recall": 0.9096,
+      "f1": 0.7707,
+      "n_true_pos": 907,
+      "n_pred_pos": 1234
+    },
+    "0.55": {
+      "precision": 0.6868,
+      "recall": 0.9019,
+      "f1": 0.7798,
+      "n_true_pos": 907,
+      "n_pred_pos": 1191
+    },
+    "0.6": {
+      "precision": 0.7024,
+      "recall": 0.8953,
+      "f1": 0.7872,
+      "n_true_pos": 907,
+      "n_pred_pos": 1156
+    },
+    "0.65": {
+      "precision": 0.7204,
+      "recall": 0.8721,
+      "f1": 0.789,
+      "n_true_pos": 907,
+      "n_pred_pos": 1098
+    },
+    "0.7": {
+      "precision": 0.75,
+      "recall": 0.8567,
+      "f1": 0.7998,
+      "n_true_pos": 907,
+      "n_pred_pos": 1036
+    },
+    "0.75": {
+      "precision": 0.7687,
+      "recall": 0.839,
+      "f1": 0.8023,
+      "n_true_pos": 907,
+      "n_pred_pos": 990
+    },
+    "0.8": {
+      "precision": 0.7968,
+      "recall": 0.8126,
+      "f1": 0.8046,
+      "n_true_pos": 907,
+      "n_pred_pos": 925
+    },
+    "0.85": {
+      "precision": 0.8235,
+      "recall": 0.7817,
+      "f1": 0.802,
+      "n_true_pos": 907,
+      "n_pred_pos": 861
+    },
+    "0.9": {
+      "precision": 0.8469,
+      "recall": 0.7442,
+      "f1": 0.7923,
+      "n_true_pos": 907,
+      "n_pred_pos": 797
+    },
+    "0.95": {
+      "precision": 0.8961,
+      "recall": 0.6847,
+      "f1": 0.7763,
+      "n_true_pos": 907,
+      "n_pred_pos": 693
+    }
+  },
+  "best_threshold": 0.8,
+  "threshold_metrics": {
+    "precision": 0.7968,
+    "recall": 0.8126,
+    "f1": 0.8046,
+    "n_true_pos": 907,
+    "n_pred_pos": 925
+  },
+  "n_train": 87282,
+  "n_test": 21821,
+  "nonzero_frac_train": 0.2263582411035494,
+  "nonzero_frac_test": 0.2293662068649466,
+  "best_iteration": 499,
+  "ood_rank_targeted": {
+    "close_rank": {
+      "n": 1294,
+      "nonzero_frac": 0.1345,
+      "threshold_metrics": {
+        "precision": 1.0,
+        "recall": 0.2356,
+        "f1": 0.3814,
+        "n_true_pos": 174,
+        "n_pred_pos": 41
+      }
+    },
+    "mid_rank": {
+      "n": 2920,
+      "nonzero_frac": 0.0942,
+      "threshold_metrics": {
+        "precision": 1.0,
+        "recall": 0.1164,
+        "f1": 0.2085,
+        "n_true_pos": 275,
+        "n_pred_pos": 32
+      }
+    },
+    "late_rank": {
+      "n": 2770,
+      "nonzero_frac": 0.0527,
+      "threshold_metrics": {
+        "precision": 1.0,
+        "recall": 0.1096,
+        "f1": 0.1975,
+        "n_true_pos": 146,
+        "n_pred_pos": 16
+      }
+    }
+  },
+  "feature_importance": {
+    "normalized_probe_rank": 0.4616333544254303,
+    "version_lag": 0.24272757768630981,
+    "recon_error_stale": 0.06990807503461838,
+    "centroid_dist": 0.06659725308418274,
+    "delete_fraction": 0.027266113087534904,
+    "rel_gap_to_prev": 0.02607071027159691,
+    "recon_error_rel_delta": 0.023309415206313133,
+    "update_fraction": 0.020717866718769073,
+    "partition_size": 0.017914006486535072,
+    "rel_gap_to_next": 0.017458852380514145,
+    "candidate_fraction": 0.01711985096335411,
+    "historical_hit_rate": 0.009276977740228176
+  },
+  "elapsed_seconds": 3.5,
+  "csv_path": "data/training_data/sift1m_recall_drop_v14.csv",
+  "model_path": "/Users/saraagarwal/vector-cache-prototype/models/sift1m_recall_drop_v14_xgb_clf.ubj"
+}

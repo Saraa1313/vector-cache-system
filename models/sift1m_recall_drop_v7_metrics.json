@@ -1,0 +1,127 @@
+{
+  "rmse_all": 0.029469219189535992,
+  "rmse_nonzero": 0.09245962852475587,
+  "rmse_train": 0.026821000055047103,
+  "threshold_metrics": {
+    "precision": 0.3997,
+    "recall": 0.71,
+    "f1": 0.5115,
+    "n_true_pos": 2121,
+    "n_pred_pos": 3768
+  },
+  "n_train": 185365,
+  "n_test": 46342,
+  "nonzero_frac_train": 0.046346397647883904,
+  "nonzero_frac_test": 0.04576841741832463,
+  "best_iteration": 228,
+  "nonzero_weight": 5.0,
+  "ood_marginal_contributor": {
+    "n": 1564,
+    "rmse_all": 0.00664500910269824,
+    "rmse_nonzero": 0.04939921312464147,
+    "threshold_metrics": {
+      "precision": 0.3333,
+      "recall": 0.75,
+      "f1": 0.4615,
+      "n_true_pos": 4,
+      "n_pred_pos": 9
+    }
+  },
+  "ood_rank_targeted": {
+    "close_rank": {
+      "n": 1404,
+      "rmse_all": 0.03064630018336477,
+      "nonzero_frac": 0.0506,
+      "threshold_metrics": {
+        "precision": 0.4638,
+        "recall": 0.9014,
+        "f1": 0.6124,
+        "n_true_pos": 71,
+        "n_pred_pos": 138
+      }
+    },
+    "mid_rank": {
+      "n": 1480,
+      "rmse_all": 0.02210354470112125,
+      "nonzero_frac": 0.0257,
+      "threshold_metrics": {
+        "precision": 0.3095,
+        "recall": 0.6842,
+        "f1": 0.4262,
+        "n_true_pos": 38,
+        "n_pred_pos": 84
+      }
+    },
+    "late_rank": {
+      "n": 1465,
+      "rmse_all": 0.020111553935085486,
+      "nonzero_frac": 0.013,
+      "threshold_metrics": {
+        "precision": 0.2105,
+        "recall": 0.8421,
+        "f1": 0.3368,
+        "n_true_pos": 19,
+        "n_pred_pos": 76
+      }
+    }
+  },
+  "feature_importance": {
+    "probe_rank": 0.3407134413719177,
+    "normalized_probe_rank": 0.26420360803604126,
+    "mutation_fraction": 0.13119694590568542,
+    "recon_error_stale": 0.050593845546245575,
+    "gap_to_prev_centroid": 0.0338275171816349,
+    "recon_error_delta": 0.029795527458190918,
+    "centroid_dist": 0.025167712941765785,
+    "partition_size": 0.024498820304870605,
+    "update_fraction": 0.023464348167181015,
+    "delete_fraction": 0.023000633344054222,
+    "gap_to_next_centroid": 0.022083047777414322,
+    "version_lag": 0.01702134683728218,
+    "candidate_fraction": 0.014433219097554684,
+    "insert_fraction": 0.0
+  },
+  "elapsed_seconds": 5.6,
+  "csv_path": "/Users/saraagarwal/vector-cache-prototype/data/training_data/sift1m_recall_drop_v7.csv",
+  "model_path": "/Users/saraagarwal/vector-cache-prototype/models/sift1m_recall_drop_v7_xgb.ubj",
+  "threshold_sweep": {
+    "0.05": {
+      "precision": 0.3997,
+      "recall": 0.71,
+      "f1": 0.5115,
+      "n_pred_pos": 3768
+    },
+    "0.06": {
+      "precision": 0.4608,
+      "recall": 0.6591,
+      "f1": 0.5424,
+      "n_pred_pos": 3034
+    },
+    "0.07": {
+      "precision": 0.5324,
+      "recall": 0.6044,
+      "f1": 0.5661,
+      "n_pred_pos": 2408
+    },
+    "0.08": {
+      "precision": 0.5837,
+      "recall": 0.554,
+      "f1": 0.5685,
+      "n_pred_pos": 2013
+    },
+    "0.09": {
+      "precision": 0.6365,
+      "recall": 0.5101,
+      "f1": 0.5663,
+      "n_pred_pos": 1700
+    },
+    "0.10": {
+      "precision": 0.6904,
+      "recall": 0.4573,
+      "f1": 0.5502,
+      "n_pred_pos": 1405
+    }
+  },
+  "selected_threshold": 0.07,
+  "threshold_selection_reason": "recall-weighted operating point; F1-optimal is 0.08 but cache system penalises false negatives (stale serves) more than false positives (extra fetches)"
+}
