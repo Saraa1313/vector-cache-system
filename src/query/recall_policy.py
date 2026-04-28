@@ -140,18 +140,30 @@ class LearnedPolicy:
     acting on decisions) until v7 OOD metrics validate it for production.
     """
 
-    def __init__(self, model_path: str, unsafe_threshold: float = 0.07,
+    def __init__(self, model_path: str, unsafe_threshold: float | None = None,
                  n_probe: int = 32, is_classifier: bool = False) -> None:
         import xgboost as xgb  # deferred — only needed when LearnedPolicy is instantiated
+        import json, os
         if is_classifier:
             self.model = xgb.XGBClassifier()
         else:
             self.model = xgb.XGBRegressor()
         self.model.load_model(model_path)
-        self.unsafe_threshold = unsafe_threshold
         self.n_probe = n_probe
         self.is_classifier = is_classifier
-        print(f"LearnedPolicy loaded: {model_path} ({'classifier' if is_classifier else 'regressor'})", flush=True)
+
+        # Load best_threshold from companion metrics JSON if not explicitly provided.
+        if unsafe_threshold is not None:
+            self.unsafe_threshold = unsafe_threshold
+        else:
+            metrics_path = model_path.replace(".ubj", "_metrics.json")
+            if os.path.exists(metrics_path):
+                with open(metrics_path) as fh:
+                    self.unsafe_threshold = float(json.load(fh).get("best_threshold", 0.85))
+            else:
+                self.unsafe_threshold = 0.85
+        print(f"LearnedPolicy loaded: {model_path} ({'classifier' if is_classifier else 'regressor'})"
+              f" threshold={self.unsafe_threshold}", flush=True)
 
     def _assemble_features(
         self,
@@ -161,7 +173,8 @@ class LearnedPolicy:
         centroid_distances: list[float] | None,
     ) -> np.ndarray:
         partition_size = int(f.get("latest_partition_size") or 0)
-        denom = max(float(partition_size), 1e-9)
+        cached_size = int(f.get("cached_partition_size") or partition_size)
+        denom = max(float(cached_size), 1e-9)
 
         updates = f.get("cumulative_updates_since_cache") or 0
         deletes = f.get("cumulative_deletes_since_cache") or 0
@@ -188,7 +201,7 @@ class LearnedPolicy:
 
         historical_hit_rate = float(f.get("historical_hit_rate") or 0.0)
 
-        return np.array([[
+        feat = np.array([[
             version_lag,
             partition_size,
             updates / denom,
@@ -202,6 +215,7 @@ class LearnedPolicy:
             candidate_fraction,
             historical_hit_rate,
         ]], dtype=np.float32)
+        return feat
 
     def predict(
         self,
@@ -223,6 +237,8 @@ class LearnedPolicy:
         candidate_fraction: float = 0.0,
         centroid_distances: list[float] | None = None,
     ) -> tuple[bool, dict]:
+        if f.get("cached_version") == f.get("latest_known_version"):
+            return False, {"reason": "fresh_in_cache", "predicted_recall_drop": 0.0}
         pred = self.predict(f, probe_rank, candidate_fraction, centroid_distances)
         fetch = pred >= self.unsafe_threshold
         return fetch, {

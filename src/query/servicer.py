@@ -21,14 +21,20 @@ class VectorSearchServicer(pb2_grpc.VectorSearchServicer):
         query = np.array(request.vector, dtype=np.float32)
         topk = request.top_k or TOPK
         n_probe = request.n_probe or _DEFAULT_N_PROBE
-        hits, centroid_ms, fetch_ms, scan_ms, cache_hits = self.node.search(query, topk=topk, n_probe=n_probe)
-        neighbors = [pb2.Neighbor(id=h["id"], distance=h["distance"]) for h in hits]
+        fetch_policy = request.fetch_policy or "heuristic"
+        result = self.node.search(query, topk=topk, n_probe=n_probe, fetch_policy=fetch_policy)
+        neighbors = [pb2.Neighbor(id=h["id"], distance=h["distance"]) for h in result.top_k]
         return pb2.SearchResponse(
             results=neighbors,
-            centroid_search_ms=centroid_ms,
-            fetch_ms=fetch_ms,
-            scan_ms=scan_ms,
-            cache_hits=cache_hits,
+            centroid_search_ms=result.centroid_search_ms,
+            fetch_ms=result.fetch_ms,
+            scan_ms=result.scan_ms,
+            cache_hits=result.cache_hits,
+            inference_ms=result.inference_ms,
+            fetch_count=result.fetch_count,
+            bytes_fetched=result.bytes_fetched,
+            cold_fetch_count=result.cold_fetch_count,
+            policy_fetch_count=result.policy_fetch_count,
         )
 
     def Insert(self, request, context):

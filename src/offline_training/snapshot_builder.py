@@ -56,6 +56,43 @@ class WorkloadTemplate:
     query_types: tuple = ("random", "hot", "boundary")  # which query types to pair with
 
 
+@dataclass
+class ChainedWorkloadTemplate:
+    """
+    Two WorkloadTemplates applied sequentially to the same base partition set.
+
+    Each sub_template independently selects its own target partitions (via its
+    own spatial_pattern and contribution_scores), then mutations are applied in
+    order on a shared working copy. The stale state is frozen from the original
+    base_partitions before any mutations.
+
+    This produces heterogeneous version_lag within a single snapshot:
+      - partitions touched by sub_templates[0] only  → version_lag = 1
+      - partitions touched by sub_templates[1] only  → version_lag = 1
+      - partitions touched by both                   → version_lag = 2,
+                                                        combined mutation counts
+
+    Overlap between concentrated and top_k_contributor is high (largest
+    partitions are usually highest contributors), so chaining these creates
+    compound mutations on the most query-critical partitions. Chaining
+    concentrated with marginal_contributor has low overlap, testing
+    heterogeneous staleness across a single query's probe set.
+    """
+    name: str
+    sub_templates: list          # list[WorkloadTemplate], applied in order
+    query_types: tuple = ("hot", "boundary")
+    rng_seed: int = 42
+    # AUX metadata fields — compatible with feature_extractor.py access pattern
+    spatial_pattern: str = "chained"
+    mutation_type: str = "chained"
+    drift_magnitude: str = "high"
+    mutation_fraction: float = 0.0  # auto-set to max(sub_template fractions) in __post_init__
+
+    def __post_init__(self):
+        if self.mutation_fraction == 0.0 and self.sub_templates:
+            self.mutation_fraction = max(t.mutation_fraction for t in self.sub_templates)
+
+
 # ── Full template set ─────────────────────────────────────────────────────────
 #
 # Covers all required dimensions:
@@ -438,8 +475,104 @@ RANK_TARGETED_TEMPLATES: list[WorkloadTemplate] = [
                      query_types=("hot", "boundary"),                          rng_seed=227),
 ]
 
+# ── Chained templates (cross-template staleness) ─────────────────────────────
+#
+# Two WorkloadTemplates applied sequentially. Each sub-template targets its own
+# partition set via its spatial_pattern. Partitions in the intersection of both
+# target sets get version_lag=2 with compound mutation counts; partitions touched
+# by only one sub-template get version_lag=1.
+#
+# concentrated + top_k_contributor: high overlap (largest ≈ highest-contributor)
+#   → compound mutations on the most query-critical partitions
+# concentrated + marginal_contributor: low overlap
+#   → heterogeneous lag across the probe set (some cids at lag=1, others at lag=2)
+
+CHAINED_TEMPLATES: list = [
+
+    # ── concentrated delete → top_k_contributor update ───────────────────────
+    ChainedWorkloadTemplate(
+        name="chained_conc_delete20_topk_update20",
+        sub_templates=[
+            WorkloadTemplate("_chain_conc_del20", mutation_type="delete",
+                             mutation_fraction=0.20, drift_magnitude="low",
+                             spatial_pattern="concentrated", rng_seed=301),
+            WorkloadTemplate("_chain_topk_upd20", mutation_type="update",
+                             mutation_fraction=0.20, drift_magnitude="high",
+                             spatial_pattern="top_k_contributor", rng_seed=302),
+        ],
+        query_types=("hot", "boundary"), rng_seed=300,
+    ),
+
+    ChainedWorkloadTemplate(
+        name="chained_conc_delete30_topk_update20",
+        sub_templates=[
+            WorkloadTemplate("_chain_conc_del30", mutation_type="delete",
+                             mutation_fraction=0.30, drift_magnitude="low",
+                             spatial_pattern="concentrated", rng_seed=311),
+            WorkloadTemplate("_chain_topk_upd20b", mutation_type="update",
+                             mutation_fraction=0.20, drift_magnitude="high",
+                             spatial_pattern="top_k_contributor", rng_seed=312),
+        ],
+        query_types=("hot", "boundary"), rng_seed=310,
+    ),
+
+    # ── top_k_contributor update → concentrated delete ────────────────────────
+    ChainedWorkloadTemplate(
+        name="chained_topk_update20_conc_delete20",
+        sub_templates=[
+            WorkloadTemplate("_chain_topk_upd20c", mutation_type="update",
+                             mutation_fraction=0.20, drift_magnitude="high",
+                             spatial_pattern="top_k_contributor", rng_seed=321),
+            WorkloadTemplate("_chain_conc_del20b", mutation_type="delete",
+                             mutation_fraction=0.20, drift_magnitude="low",
+                             spatial_pattern="concentrated", rng_seed=322),
+        ],
+        query_types=("hot", "boundary"), rng_seed=320,
+    ),
+
+    ChainedWorkloadTemplate(
+        name="chained_topk_delete20_conc_update30",
+        sub_templates=[
+            WorkloadTemplate("_chain_topk_del20", mutation_type="delete",
+                             mutation_fraction=0.20, drift_magnitude="low",
+                             spatial_pattern="top_k_contributor", rng_seed=331),
+            WorkloadTemplate("_chain_conc_upd30", mutation_type="update",
+                             mutation_fraction=0.30, drift_magnitude="high",
+                             spatial_pattern="concentrated", rng_seed=332),
+        ],
+        query_types=("hot", "boundary"), rng_seed=330,
+    ),
+
+    # ── concentrated → marginal_contributor (low overlap) ────────────────────
+    ChainedWorkloadTemplate(
+        name="chained_conc_mixed20_marginal_delete20",
+        sub_templates=[
+            WorkloadTemplate("_chain_conc_mix20", mutation_type="mixed",
+                             mutation_fraction=0.20, drift_magnitude="high",
+                             spatial_pattern="concentrated", rng_seed=341),
+            WorkloadTemplate("_chain_marg_del20", mutation_type="delete",
+                             mutation_fraction=0.20, drift_magnitude="low",
+                             spatial_pattern="marginal_contributor", rng_seed=342),
+        ],
+        query_types=("hot", "boundary"), rng_seed=340,
+    ),
+
+    ChainedWorkloadTemplate(
+        name="chained_topk_delete30_marginal_update20",
+        sub_templates=[
+            WorkloadTemplate("_chain_topk_del30", mutation_type="delete",
+                             mutation_fraction=0.30, drift_magnitude="low",
+                             spatial_pattern="top_k_contributor", rng_seed=351),
+            WorkloadTemplate("_chain_marg_upd20", mutation_type="update",
+                             mutation_fraction=0.20, drift_magnitude="high",
+                             spatial_pattern="marginal_contributor", rng_seed=352),
+        ],
+        query_types=("hot", "boundary"), rng_seed=350,
+    ),
+]
+
 # Full set used by the pipeline
-TEMPLATES = TEMPLATES + MULTI_ROUND_TEMPLATES + RANK_TARGETED_TEMPLATES
+TEMPLATES = TEMPLATES + MULTI_ROUND_TEMPLATES + RANK_TARGETED_TEMPLATES + CHAINED_TEMPLATES
 
 # Convenience alias: lightweight smoke-test templates
 FIRST_VERSION_TEMPLATES: list[WorkloadTemplate] = [
@@ -654,6 +787,97 @@ def build_mutated_snapshot(
         fresh_partitions=fresh_partitions,
         all_partitions=all_partitions,
         affected_cids=list(fresh_partitions.keys()),
+        mutation_log=accumulated_log,
+        centroids=centroids,
+    )
+
+
+def build_chained_snapshot(
+    partitions: dict,
+    centroids: np.ndarray,
+    chain_template: "ChainedWorkloadTemplate",
+    contribution_scores_list: list,
+) -> MutatedSnapshot:
+    """
+    Apply chain_template.sub_templates sequentially to the same base partitions.
+
+    Each sub_template selects its own target partition set via its spatial_pattern.
+    The union of all targeted partitions becomes the affected set, with stale copies
+    frozen from the original base_partitions before any mutations are applied.
+
+    version_lag per partition = number of sub_templates that mutated it:
+      - touched by one sub_template only  → version_lag = 1
+      - touched by both sub_templates     → version_lag = 2, combined mutation counts
+
+    contribution_scores_list: one entry per sub_template — the pre-computed
+    {cid: score} dict for contribution/rank-targeted patterns, or None for
+    patterns that don't require it (uniform, concentrated).
+    """
+    _dummy_rng = np.random.default_rng(0)  # _select_target_partitions does not consume rng
+
+    # ── Step 1: Select target partitions for each sub-template ────────────────
+    sub_target_cids: list[list[int]] = []
+    for sub_t, scores in zip(chain_template.sub_templates, contribution_scores_list):
+        cids = _select_target_partitions(partitions, sub_t, _dummy_rng, scores)
+        cids = [c for c in cids if len(partitions[c][0]) > 0]
+        sub_target_cids.append(cids)
+
+    # ── Step 2: Freeze stale copies (before any mutations) ────────────────────
+    all_affected: set[int] = {c for cids in sub_target_cids for c in cids}
+    stale_partitions: dict[int, tuple] = {}
+    for cid in all_affected:
+        ids, vecs, version = partitions[cid]
+        stale_partitions[cid] = (ids.copy(), vecs.copy(), version)
+
+    # ── Step 3: Apply each sub-template in order ──────────────────────────────
+    working: dict[int, tuple] = dict(partitions)
+    accumulated_log: dict[int, MutationLog] = {
+        cid: MutationLog(version_lag=0) for cid in all_affected
+    }
+
+    for sub_t, target_cids in zip(chain_template.sub_templates, sub_target_cids):
+        drift_scale = _DRIFT_SCALE.get(sub_t.drift_magnitude, 50.0)
+        rng = np.random.default_rng(sub_t.rng_seed)
+
+        for cid in target_cids:
+            ids, vecs, version = working[cid]
+            if len(ids) == 0:
+                continue
+
+            n_mutate = max(1, int(len(ids) * sub_t.mutation_fraction))
+            log = accumulated_log[cid]
+
+            if sub_t.mutation_type == "update":
+                new_ids, new_vecs, n_done = _apply_update(ids, vecs, n_mutate, drift_scale, rng)
+                log.updates += n_done
+
+            elif sub_t.mutation_type == "delete":
+                new_ids, new_vecs, n_done = _apply_delete(ids, vecs, n_mutate, rng)
+                log.deletes += n_done
+
+            else:  # mixed
+                n_upd = n_mutate // 2
+                n_del = n_mutate - n_upd
+                tmp_ids, tmp_vecs, n_upd_done = _apply_update(ids, vecs, n_upd, drift_scale, rng)
+                new_ids, new_vecs, n_del_done = _apply_delete(tmp_ids, tmp_vecs, n_del, rng)
+                log.updates += n_upd_done
+                log.deletes += n_del_done
+
+            log.version_lag += 1
+            working[cid] = (new_ids, new_vecs, version + 1)
+
+    # ── Step 4: Build result ──────────────────────────────────────────────────
+    fresh_partitions: dict[int, tuple] = {cid: working[cid] for cid in all_affected}
+    all_partitions = dict(partitions)
+    for cid, entry in fresh_partitions.items():
+        all_partitions[cid] = entry
+
+    return MutatedSnapshot(
+        template=chain_template,
+        stale_partitions=stale_partitions,
+        fresh_partitions=fresh_partitions,
+        all_partitions=all_partitions,
+        affected_cids=list(all_affected),
         mutation_log=accumulated_log,
         centroids=centroids,
     )

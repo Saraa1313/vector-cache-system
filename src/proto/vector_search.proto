@@ -14,6 +14,7 @@ message SearchRequest {
   repeated float vector = 1;
   int32  top_k           = 2;
   int32  n_probe         = 3;
+  string fetch_policy    = 4;  // "heuristic" | "learned" | "always_fetch" | "always_cache"
 }
 
 message Neighbor {
@@ -26,7 +27,12 @@ message SearchResponse {
   float centroid_search_ms         = 2;  // time to find n_probe centroids
   float fetch_ms                   = 3;  // total MinIO fetch time
   float scan_ms                    = 4;  // brute-force L2 scan time
-  int32 cache_hits                 = 5;  // centroids served from cache (out of n_probe)
+  int32 cache_hits                 = 5;  // partitions served from cache (out of n_probe)
+  float inference_ms               = 6;  // XGBoost inference time (learned policy only)
+  int32 fetch_count                = 7;  // partitions fetched from MinIO (cold + policy)
+  int64 bytes_fetched              = 8;  // raw bytes fetched from MinIO
+  int32 cold_fetch_count           = 9;  // fetches because partition was not in cache
+  int32 policy_fetch_count         = 10; // fetches because policy decided stale cached partition needs refresh
 }
 
 message InsertRequest {

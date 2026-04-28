@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x13vector_search.proto\x12\x0cvectorsearch\"?\n\rSearchRequest\x12\x0e\n\x06vector\x18\x01 \x03(\x02\x12\r\n\x05top_k\x18\x02 \x01(\x05\x12\x0f\n\x07n_probe\x18\x03 \x01(\x05\"(\n\x08Neighbor\x12\n\n\x02id\x18\x01 \x01(\x03\x12\x10\n\x08\x64istance\x18\x02 \x01(\x02\"\x8c\x01\n\x0eSearchResponse\x12\'\n\x07results\x18\x01 \x03(\x0b\x32\x16.vectorsearch.Neighbor\x12\x1a\n\x12\x63\x65ntroid_search_ms\x18\x02 \x01(\x02\x12\x10\n\x08\x66\x65tch_ms\x18\x03 \x01(\x02\x12\x0f\n\x07scan_ms\x18\x04 \x01(\x02\x12\x12\n\ncache_hits\x18\x05 \x01(\x05\"\x1f\n\rInsertRequest\x12\x0e\n\x06vector\x18\x01 \x03(\x02\"\x1c\n\x0eInsertResponse\x12\n\n\x02id\x18\x01 \x01(\x03\"\x1b\n\rDeleteRequest\x12\n\n\x02id\x18\x01 \x01(\x03\"!\n\x0e\x44\x65leteResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\"/\n\rUpdateRequest\x12\n\n\x02id\x18\x01 \x01(\x03\x12\x12\n\nnew_vector\x18\x02 \x03(\x02\"!\n\x0eUpdateResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\"\x13\n\x11\x43learCacheRequest\"\x14\n\x12\x43learCacheResponse\"\xa2\x02\n\x16PartitionMetadataDelta\x12\x14\n\x0cpartition_id\x18\x01 \x01(\x05\x12\x12\n\nversion_id\x18\x02 \x01(\x05\x12\x19\n\x11number_of_inserts\x18\x03 \x01(\x05\x12\x19\n\x11number_of_updates\x18\x04 \x01(\x05\x12\x19\n\x11number_of_deletes\x18\x05 \x01(\x05\x12\x16\n\x0epartition_size\x18\x06 \x01(\x05\x12 \n\x18\x66raction_vectors_touched\x18\x07 \x01(\x02\x12\x1f\n\x17membership_change_count\x18\x08 \x01(\x05\x12\x14\n\x0cnew_centroid\x18\t \x03(\x02\x12\x1c\n\x14reconstruction_error\x18\n \x01(\x02\"o\n\x18\x42\x61tchAppliedNotification\x12\x13\n\x0blast_seq_id\x18\x01 \x01(\x03\x12>\n\x10partition_deltas\x18\x02 \x03(\x0b\x32$.vectorsearch.PartitionMetadataDelta\"\x11\n\x0f\x42\x61tchAppliedAck2\xd0\x03\n\x0cVectorSearch\x12\x43\n\x06Search\x12\x1b.vectorsearch.SearchRequest\x1a\x1c.vectorsearch.SearchResponse\x12\x43\n\x06Insert\x12\x1b.vectorsearch.InsertRequest\x1a\x1c.vectorsearch.InsertResponse\x12\x43\n\x06\x44\x65lete\x12\x1b.vectorsearch.DeleteRequest\x1a\x1c.vectorsearch.DeleteResponse\x12\x43\n\x06Update\x12\x1b.vectorsearch.UpdateRequest\x1a\x1c.vectorsearch.UpdateResponse\x12O\n\nClearCache\x12\x1f.vectorsearch.ClearCacheRequest\x1a .vectorsearch.ClearCacheResponse\x12[\n\x12NotifyBatchApplied\x12&.vectorsearch.BatchAppliedNotification\x1a\x1d.vectorsearch.BatchAppliedAckb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x13vector_search.proto\x12\x0cvectorsearch\"U\n\rSearchRequest\x12\x0e\n\x06vector\x18\x01 \x03(\x02\x12\r\n\x05top_k\x18\x02 \x01(\x05\x12\x0f\n\x07n_probe\x18\x03 \x01(\x05\x12\x14\n\x0c\x66\x65tch_policy\x18\x04 \x01(\t\"(\n\x08Neighbor\x12\n\n\x02id\x18\x01 \x01(\x03\x12\x10\n\x08\x64istance\x18\x02 \x01(\x02\"\x84\x02\n\x0eSearchResponse\x12\'\n\x07results\x18\x01 \x03(\x0b\x32\x16.vectorsearch.Neighbor\x12\x1a\n\x12\x63\x65ntroid_search_ms\x18\x02 \x01(\x02\x12\x10\n\x08\x66\x65tch_ms\x18\x03 \x01(\x02\x12\x0f\n\x07scan_ms\x18\x04 \x01(\x02\x12\x12\n\ncache_hits\x18\x05 \x01(\x05\x12\x14\n\x0cinference_ms\x18\x06 \x01(\x02\x12\x13\n\x0b\x66\x65tch_count\x18\x07 \x01(\x05\x12\x15\n\rbytes_fetched\x18\x08 \x01(\x03\x12\x18\n\x10\x63old_fetch_count\x18\t \x01(\x05\x12\x1a\n\x12policy_fetch_count\x18\n \x01(\x05\"\x1f\n\rInsertRequest\x12\x0e\n\x06vector\x18\x01 \x03(\x02\"\x1c\n\x0eInsertResponse\x12\n\n\x02id\x18\x01 \x01(\x03\"\x1b\n\rDeleteRequest\x12\n\n\x02id\x18\x01 \x01(\x03\"!\n\x0e\x44\x65leteResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\"/\n\rUpdateRequest\x12\n\n\x02id\x18\x01 \x01(\x03\x12\x12\n\nnew_vector\x18\x02 \x03(\x02\"!\n\x0eUpdateResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\"\x13\n\x11\x43learCacheRequest\"\x14\n\x12\x43learCacheResponse\"\xa2\x02\n\x16PartitionMetadataDelta\x12\x14\n\x0cpartition_id\x18\x01 \x01(\x05\x12\x12\n\nversion_id\x18\x02 \x01(\x05\x12\x19\n\x11number_of_inserts\x18\x03 \x01(\x05\x12\x19\n\x11number_of_updates\x18\x04 \x01(\x05\x12\x19\n\x11number_of_deletes\x18\x05 \x01(\x05\x12\x16\n\x0epartition_size\x18\x06 \x01(\x05\x12 \n\x18\x66raction_vectors_touched\x18\x07 \x01(\x02\x12\x1f\n\x17membership_change_count\x18\x08 \x01(\x05\x12\x14\n\x0cnew_centroid\x18\t \x03(\x02\x12\x1c\n\x14reconstruction_error\x18\n \x01(\x02\"o\n\x18\x42\x61tchAppliedNotification\x12\x13\n\x0blast_seq_id\x18\x01 \x01(\x03\x12>\n\x10partition_deltas\x18\x02 \x03(\x0b\x32$.vectorsearch.PartitionMetadataDelta\"\x11\n\x0f\x42\x61tchAppliedAck2\xd0\x03\n\x0cVectorSearch\x12\x43\n\x06Search\x12\x1b.vectorsearch.SearchRequest\x1a\x1c.vectorsearch.SearchResponse\x12\x43\n\x06Insert\x12\x1b.vectorsearch.InsertRequest\x1a\x1c.vectorsearch.InsertResponse\x12\x43\n\x06\x44\x65lete\x12\x1b.vectorsearch.DeleteRequest\x1a\x1c.vectorsearch.DeleteResponse\x12\x43\n\x06Update\x12\x1b.vectorsearch.UpdateRequest\x1a\x1c.vectorsearch.UpdateResponse\x12O\n\nClearCache\x12\x1f.vectorsearch.ClearCacheRequest\x1a .vectorsearch.ClearCacheResponse\x12[\n\x12NotifyBatchApplied\x12&.vectorsearch.BatchAppliedNotification\x1a\x1d.vectorsearch.BatchAppliedAckb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -32,33 +32,33 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'vector_search_pb2', _global
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
   _globals['_SEARCHREQUEST']._serialized_start=37
-  _globals['_SEARCHREQUEST']._serialized_end=100
-  _globals['_NEIGHBOR']._serialized_start=102
-  _globals['_NEIGHBOR']._serialized_end=142
-  _globals['_SEARCHRESPONSE']._serialized_start=145
-  _globals['_SEARCHRESPONSE']._serialized_end=285
-  _globals['_INSERTREQUEST']._serialized_start=287
-  _globals['_INSERTREQUEST']._serialized_end=318
-  _globals['_INSERTRESPONSE']._serialized_start=320
-  _globals['_INSERTRESPONSE']._serialized_end=348
-  _globals['_DELETEREQUEST']._serialized_start=350
-  _globals['_DELETEREQUEST']._serialized_end=377
-  _globals['_DELETERESPONSE']._serialized_start=379
-  _globals['_DELETERESPONSE']._serialized_end=412
-  _globals['_UPDATEREQUEST']._serialized_start=414
-  _globals['_UPDATEREQUEST']._serialized_end=461
-  _globals['_UPDATERESPONSE']._serialized_start=463
-  _globals['_UPDATERESPONSE']._serialized_end=496
-  _globals['_CLEARCACHEREQUEST']._serialized_start=498
-  _globals['_CLEARCACHEREQUEST']._serialized_end=517
-  _globals['_CLEARCACHERESPONSE']._serialized_start=519
-  _globals['_CLEARCACHERESPONSE']._serialized_end=539
-  _globals['_PARTITIONMETADATADELTA']._serialized_start=542
-  _globals['_PARTITIONMETADATADELTA']._serialized_end=832
-  _globals['_BATCHAPPLIEDNOTIFICATION']._serialized_start=834
-  _globals['_BATCHAPPLIEDNOTIFICATION']._serialized_end=945
-  _globals['_BATCHAPPLIEDACK']._serialized_start=947
-  _globals['_BATCHAPPLIEDACK']._serialized_end=964
-  _globals['_VECTORSEARCH']._serialized_start=967
-  _globals['_VECTORSEARCH']._serialized_end=1431
+  _globals['_SEARCHREQUEST']._serialized_end=122
+  _globals['_NEIGHBOR']._serialized_start=124
+  _globals['_NEIGHBOR']._serialized_end=164
+  _globals['_SEARCHRESPONSE']._serialized_start=167
+  _globals['_SEARCHRESPONSE']._serialized_end=427
+  _globals['_INSERTREQUEST']._serialized_start=429
+  _globals['_INSERTREQUEST']._serialized_end=460
+  _globals['_INSERTRESPONSE']._serialized_start=462
+  _globals['_INSERTRESPONSE']._serialized_end=490
+  _globals['_DELETEREQUEST']._serialized_start=492
+  _globals['_DELETEREQUEST']._serialized_end=519
+  _globals['_DELETERESPONSE']._serialized_start=521
+  _globals['_DELETERESPONSE']._serialized_end=554
+  _globals['_UPDATEREQUEST']._serialized_start=556
+  _globals['_UPDATEREQUEST']._serialized_end=603
+  _globals['_UPDATERESPONSE']._serialized_start=605
+  _globals['_UPDATERESPONSE']._serialized_end=638
+  _globals['_CLEARCACHEREQUEST']._serialized_start=640
+  _globals['_CLEARCACHEREQUEST']._serialized_end=659
+  _globals['_CLEARCACHERESPONSE']._serialized_start=661
+  _globals['_CLEARCACHERESPONSE']._serialized_end=681
+  _globals['_PARTITIONMETADATADELTA']._serialized_start=684
+  _globals['_PARTITIONMETADATADELTA']._serialized_end=974
+  _globals['_BATCHAPPLIEDNOTIFICATION']._serialized_start=976
+  _globals['_BATCHAPPLIEDNOTIFICATION']._serialized_end=1087
+  _globals['_BATCHAPPLIEDACK']._serialized_start=1089
+  _globals['_BATCHAPPLIEDACK']._serialized_end=1106
+  _globals['_VECTORSEARCH']._serialized_start=1109
+  _globals['_VECTORSEARCH']._serialized_end=1573
 # @@protoc_insertion_point(module_scope)

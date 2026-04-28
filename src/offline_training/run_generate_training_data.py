@@ -38,7 +38,10 @@ from admin.data_loader import read_fvecs
 from admin.compute_ground_truth import brute_force_topk
 
 from common.partition_utils import load_all_partitions, compute_partition_contributions, compute_rank_targeted_scores
-from offline_training.snapshot_builder import TEMPLATES, build_mutated_snapshot
+from offline_training.snapshot_builder import (
+    TEMPLATES, build_mutated_snapshot,
+    ChainedWorkloadTemplate, build_chained_snapshot,
+)
 from offline_training.query_sampler import sample_queries
 from offline_training.label_generator import compute_all_labels
 from offline_training.feature_extractor import extract_features_for_qp
@@ -119,7 +122,43 @@ def main() -> None:
               f"  query_types={active_query_types}")
 
         # ── Step 1: build snapshot ────────────────────────────────────────────
-        if template.spatial_pattern in _CONTRIBUTION_PATTERNS:
+        if isinstance(template, ChainedWorkloadTemplate):
+            # Chained: two sub-templates applied sequentially with independent
+            # partition sets. Sample hot queries once if any sub-template needs
+            # contribution scoring; reuse across sub-templates.
+            needs_hot = any(
+                st.spatial_pattern in (_CONTRIBUTION_PATTERNS | _RANK_TARGETED_PATTERNS)
+                for st in template.sub_templates
+            )
+            if needs_hot:
+                hot_queries = sample_queries(
+                    all_queries, "hot", args.n_queries, centroid_index, args.n_probe,
+                    partitions=base_partitions,
+                    rng=np.random.default_rng(hash(template.name + "hot") % (2 ** 31)),
+                )
+                print(f"  Computing per-sub-template scores from {len(hot_queries)} hot queries ...")
+            else:
+                hot_queries = None
+
+            contribution_scores_list = []
+            for sub_t in template.sub_templates:
+                if sub_t.spatial_pattern in _CONTRIBUTION_PATTERNS:
+                    scores = compute_partition_contributions(
+                        hot_queries, base_partitions, centroid_index, args.n_probe, args.topk,
+                    )
+                elif sub_t.spatial_pattern in _RANK_TARGETED_PATTERNS:
+                    scores = compute_rank_targeted_scores(
+                        hot_queries, centroid_index, args.n_probe, sub_t.rank_range,
+                    )
+                else:
+                    scores = None
+                contribution_scores_list.append(scores)
+
+            snapshot = build_chained_snapshot(
+                base_partitions, centroids, template, contribution_scores_list,
+            )
+
+        elif template.spatial_pattern in _CONTRIBUTION_PATTERNS:
             # Contribution-based: sample hot queries first, score contributions,
             # then build snapshot so targeted partitions align with the labeling batch.
             hot_queries = sample_queries(

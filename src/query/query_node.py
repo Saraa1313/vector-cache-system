@@ -1,8 +1,17 @@
 import threading
 import time
 import numpy as np
-import faiss
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, field
+
+# xgboost must be imported before faiss — both use native BLAS/OpenMP libraries
+# and faiss claiming the thread pool first causes XGBoost load_model to segfault.
+try:
+    import xgboost as _xgb_preload  # noqa: F401
+except ImportError:
+    pass
+
+import faiss
 
 from config import N_PROBE, CENTROIDS_PATH, CACHE_SIZE
 from query.lru_cache import LRUCache
@@ -11,6 +20,34 @@ from storage.object_store import ObjectStore
 from storage.wal import WALClient
 
 _DEFAULT_N_PROBE = N_PROBE[0] if isinstance(N_PROBE, list) else N_PROBE
+_VALID_POLICIES = {"heuristic", "learned", "always_fetch", "always_cache"}
+
+
+@dataclass
+class PartitionDecision:
+    partition_id: int
+    probe_rank: int
+    in_cache: bool
+    decision: str                    # "fetch" or "cache"
+    learned_prediction: float | None # model P(unsafe), None if not learned policy
+    fetch_latency_ms: float
+    bytes_fetched: int
+
+
+@dataclass
+class QueryResult:
+    top_k: list
+    total_ms: float
+    centroid_search_ms: float
+    fetch_ms: float
+    inference_ms: float
+    scan_ms: float
+    cache_hits: int
+    fetch_count: int
+    bytes_fetched: int
+    cold_fetch_count: int = 0   # partition was not in cache at all
+    policy_fetch_count: int = 0 # partition was cached but policy decided to refresh
+    partition_log: list = field(default_factory=list)
 
 
 class QueryNode:
@@ -35,7 +72,8 @@ class QueryNode:
         self._learned_policy: LearnedPolicy | None = None
         if model_path is not None:
             self._learned_policy = LearnedPolicy(
-                model_path, n_probe=_DEFAULT_N_PROBE
+                model_path, n_probe=_DEFAULT_N_PROBE,
+                is_classifier=True,
             )
         self._use_learned_policy = use_learned_policy and (self._learned_policy is not None)
         print("Query node ready", flush=True)
@@ -45,7 +83,16 @@ class QueryNode:
         _, I = self._centroid_index.search(q, 1)
         return int(I[0, 0])
 
-    def search(self, query: np.ndarray, topk: int, n_probe: int = _DEFAULT_N_PROBE):
+    def search(
+        self,
+        query: np.ndarray,
+        topk: int,
+        n_probe: int = _DEFAULT_N_PROBE,
+        fetch_policy: str = "heuristic",
+    ) -> QueryResult:
+        if fetch_policy not in _VALID_POLICIES:
+            fetch_policy = "heuristic"
+
         q = np.ascontiguousarray(query.reshape(1, -1).astype(np.float32))
 
         t0 = time.perf_counter()
@@ -56,7 +103,9 @@ class QueryNode:
 
         t1 = time.perf_counter()
         entries: dict[int, tuple] = {}
-        fetch_ids = []  # partitions to fetch from MinIO (not cached, or policy says stale)
+        fetch_ids: list[int] = []
+        inference_ms = 0.0
+        partition_log: list[PartitionDecision] = []
 
         with self._freshness_lock:
             total_probe_size = sum(
@@ -67,40 +116,64 @@ class QueryNode:
             for rank, cid in enumerate(probe_ids, start=1):
                 cid = int(cid)
                 entry = self._cache.get(cid)
-                if entry is None:
-                    # Not in cache — must fetch
+                in_cache = entry is not None
+                learned_pred: float | None = None
+
+                if not in_cache:
+                    # Not in cache — must fetch regardless of policy
+                    decision = "fetch"
                     fetch_ids.append(cid)
+                elif fetch_policy == "always_fetch":
+                    decision = "fetch"
+                    fetch_ids.append(cid)
+                elif fetch_policy == "always_cache":
+                    decision = "cache"
+                    entries[cid] = entry
                 else:
+                    # "learned" or "heuristic" — consult policy
                     f = self._freshness.get(cid)
                     if f is None:
-                        # In cache but no freshness entry — use cache conservatively
+                        decision = "cache"
                         entries[cid] = entry
                     else:
                         candidate_fraction = (
                             f["latest_partition_size"] / max(total_probe_size, 1)
                         )
-                        fetch, diag = self._policy.should_fetch(
-                            f, probe_rank=rank,
-                            candidate_fraction=candidate_fraction,
-                            centroid_distances=centroid_dists,
-                        )
-                        # Shadow mode: run learned policy on every query for logging,
-                        # but only act on its decision when use_learned_policy=True.
-                        if self._learned_policy is not None:
-                            lp_fetch, lp_diag = self._learned_policy.should_fetch(
+                        if fetch_policy == "learned" and self._learned_policy is not None:
+                            t_inf = time.perf_counter()
+                            fetch, diag = self._learned_policy.should_fetch(
                                 f, probe_rank=rank,
                                 candidate_fraction=candidate_fraction,
                                 centroid_distances=centroid_dists,
                             )
-                            if self._use_learned_policy:
-                                fetch = lp_fetch
-                                diag  = lp_diag
+                            inference_ms += (time.perf_counter() - t_inf) * 1000
+                            learned_pred = diag.get("predicted_recall_drop")
+                        else:
+                            fetch, _ = self._policy.should_fetch(
+                                f, probe_rank=rank,
+                                candidate_fraction=candidate_fraction,
+                                centroid_distances=centroid_dists,
+                            )
                         if fetch:
+                            decision = "fetch"
                             fetch_ids.append(cid)
                         else:
+                            decision = "cache"
                             entries[cid] = entry
 
+                partition_log.append(PartitionDecision(
+                    partition_id=cid,
+                    probe_rank=rank,
+                    in_cache=in_cache,
+                    decision=decision,
+                    learned_prediction=learned_pred,
+                    fetch_latency_ms=0.0,  # filled in after fetch
+                    bytes_fetched=0,       # filled in after fetch
+                ))
+
         cache_hits = len(probe_ids) - len(fetch_ids)
+        total_bytes_fetched = 0
+        fetch_timings: dict[int, tuple[float, int]] = {}  # cid -> (latency_ms, bytes)
 
         if fetch_ids:
             with ThreadPoolExecutor(max_workers=len(fetch_ids)) as executor:
@@ -108,12 +181,22 @@ class QueryNode:
                            for cid in fetch_ids}
                 for future in as_completed(futures):
                     cid = futures[future]
+                    t_fetch = time.perf_counter()
                     ids, vecs, version = future.result()
+                    fetch_lat = (time.perf_counter() - t_fetch) * 1000
+                    nbytes = int(ids.nbytes + vecs.nbytes)
+                    total_bytes_fetched += nbytes
+                    fetch_timings[cid] = (fetch_lat, nbytes)
                     self._cache.put(cid, (ids, vecs, version))
                     entries[cid] = (ids, vecs, version)
                     cached_re = self._recon_error(cid, vecs)
                     self._init_freshness(cid, version, partition_size=len(ids),
                                         cached_reconstruction_error=cached_re)
+
+        # Backfill per-partition fetch timings into the log
+        for pd in partition_log:
+            if pd.partition_id in fetch_timings:
+                pd.fetch_latency_ms, pd.bytes_fetched = fetch_timings[pd.partition_id]
 
         candidate_ids = [entries[int(cid)][0] for cid in probe_ids]
         candidate_vecs = [entries[int(cid)][1] for cid in probe_ids]
@@ -127,8 +210,9 @@ class QueryNode:
         scan_ms = (time.perf_counter() - t2) * 1000
 
         results = [{"id": int(candidate_ids[i]), "distance": float(dists[i])} for i in top_idx]
+        total_ms = (time.perf_counter() - t0) * 1000
 
-        # Update per-partition hit rate EMA: did this partition contribute to the top-k?
+        # Update per-partition hit rate EMA
         result_id_set = {r["id"] for r in results}
         contributing_cids: set[int] = set()
         for cid in probe_ids:
@@ -148,7 +232,23 @@ class QueryNode:
                 if cid in self._freshness:
                     self._freshness[cid]["historical_hit_rate"] = round(self._hit_rate_ema[cid], 4)
 
-        return results, centroid_search_ms, fetch_ms, scan_ms, cache_hits
+        cold_fetch_count   = sum(1 for pd in partition_log if not pd.in_cache and pd.decision == "fetch")
+        policy_fetch_count = sum(1 for pd in partition_log if pd.in_cache  and pd.decision == "fetch")
+
+        return QueryResult(
+            top_k=results,
+            total_ms=total_ms,
+            centroid_search_ms=centroid_search_ms,
+            fetch_ms=fetch_ms,
+            inference_ms=inference_ms,
+            scan_ms=scan_ms,
+            cache_hits=cache_hits,
+            fetch_count=len(fetch_ids),
+            bytes_fetched=total_bytes_fetched,
+            cold_fetch_count=cold_fetch_count,
+            policy_fetch_count=policy_fetch_count,
+            partition_log=partition_log,
+        )
 
     def _recon_error(self, cid: int, vecs: np.ndarray) -> float:
         """Mean L2 distance from partition vectors to their centroid."""
@@ -182,6 +282,7 @@ class QueryNode:
                 "cumulative_updates_since_cache":       0,
                 "cumulative_deletes_since_cache":       0,
                 "cumulative_membership_changes_since_cache": 0,
+                "cached_partition_size":                partition_size,
                 "latest_partition_size":                partition_size,
                 "latest_fraction_vectors_touched":      None,
                 "latest_reconstruction_error":          None,
@@ -213,19 +314,6 @@ class QueryNode:
                 f["latest_reconstruction_error"]    = delta.reconstruction_error
                 f["latest_centroid"]                = list(delta.new_centroid)
                 f["last_metadata_update_time"]      = time.time()
-        # print(f"Query node received batch applied: seq={last_seq_id} partitions={[d.partition_id for d in partition_deltas]}", flush=True)
-        with self._freshness_lock:
-            for cid, f in sorted(self._freshness.items()):
-                pass
-                # print(f"  [freshness] cid={cid}"
-                #       f"  cached_ver={f['cached_version']}"
-                #       f"  latest_ver={f['latest_known_version']}"
-                #       f"  cum_ins={f['cumulative_inserts_since_cache']}"
-                #       f"  cum_upd={f['cumulative_updates_since_cache']}"
-                #       f"  cum_del={f['cumulative_deletes_since_cache']}"
-                #       f"  cum_mem={f['cumulative_membership_changes_since_cache']}"
-                #       f"  size={f['latest_partition_size']}"
-                #       f"  re={f['latest_reconstruction_error']}", flush=True)
 
     def get_cached_version(self, partition_id: int) -> int | None:
         entry = self._cache.get(partition_id)
