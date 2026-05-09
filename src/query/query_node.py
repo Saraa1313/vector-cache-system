@@ -20,7 +20,7 @@ from storage.object_store import ObjectStore
 from storage.wal import WALClient
 
 _DEFAULT_N_PROBE = N_PROBE[0] if isinstance(N_PROBE, list) else N_PROBE
-_VALID_POLICIES = {"heuristic", "learned", "always_fetch", "always_cache"}
+_VALID_POLICIES = {"heuristic", "learned", "always_fetch", "always_cache", "fetch_on_lag"}
 
 
 @dataclass
@@ -129,6 +129,14 @@ class QueryNode:
                 elif fetch_policy == "always_cache":
                     decision = "cache"
                     entries[cid] = entry
+                elif fetch_policy == "fetch_on_lag":
+                    f = self._freshness.get(cid)
+                    if f is not None and f["latest_known_version"] > f["cached_version"]:
+                        decision = "fetch"
+                        fetch_ids.append(cid)
+                    else:
+                        decision = "cache"
+                        entries[cid] = entry
                 else:
                     # "learned" or "heuristic" — consult policy
                     f = self._freshness.get(cid)

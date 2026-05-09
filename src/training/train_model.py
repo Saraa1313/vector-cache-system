@@ -42,6 +42,7 @@ FEATURE_COLS = [
     "partition_size",
     "update_fraction",
     "delete_fraction",
+    "size_reduction_fraction",
     "recon_error_stale",
     "recon_error_rel_delta",
     "normalized_probe_rank",
@@ -112,6 +113,7 @@ def train(
     use_classifier: bool = False,
     resample_ratio: float | None = None,
     min_fresh_recall: float = 0.80,
+    delete_weight: float = 1.0,
 ) -> dict:
     t0 = time.time()
     print(f"Loading {csv_path} ...")
@@ -122,6 +124,16 @@ def train(
         print(f"  Dropped {before - len(df):,} rows with fresh_recall < {min_fresh_recall}")
     print(f"  {len(df):,} rows  |  nonzero recall_drop: "
           f"{(df[TARGET] > 0).sum():,} ({100*(df[TARGET]>0).mean():.1f}%)")
+
+    # Derive size_reduction_fraction from counts if not already in the CSV (v15 and earlier).
+    # For templates with no inserts: equals delete_fraction exactly.
+    if "size_reduction_fraction" not in df.columns:
+        if "delete_count" in df.columns and "partition_size" in df.columns:
+            ins = df["insert_count"] if "insert_count" in df.columns else 0
+            net_shrink = (df["delete_count"] - ins).clip(lower=0)
+            df["size_reduction_fraction"] = (net_shrink / df["partition_size"].clip(lower=1)).round(6)
+        else:
+            df["size_reduction_fraction"] = 0.0
 
     missing = [c for c in FEATURE_COLS if c not in df.columns]
     if missing:
@@ -161,6 +173,17 @@ def train(
     X_tr  = X_train.iloc[tr_idx]
     X_val = X_train.iloc[val_idx]
 
+    # ── Delete upweighting vector (classifier only, built from full df_train) ──
+    # Computed before resampling so indices stay aligned with df_train positions.
+    w_delete = np.ones(len(df_train), dtype=np.float32)
+    if delete_weight != 1.0 and "mutation_type" in df_train.columns:
+        delete_pos = (
+            (df_train["mutation_type"] == "delete") &
+            (df_train[TARGET] >= unsafe_threshold)
+        ).values
+        w_delete[delete_pos] = delete_weight
+        print(f"  Delete upweighting: {delete_pos.sum():,} delete positive rows → weight={delete_weight}")
+
     if use_classifier:
         # ── Classifier ───────────────────────────────────────────────────────
         # Optional: undersample negatives to resample_ratio negatives per positive
@@ -187,6 +210,8 @@ def train(
 
         y_tr  = y_train_bin.iloc[tr_idx]
         y_val = y_train_bin.iloc[val_idx]
+        # Slice delete weights to match X_tr (respects resampling if applied)
+        w_tr = w_delete[keep][tr_idx] if resample_ratio is not None else w_delete[tr_idx]
         n_neg = (y_train_bin == 0).sum()
         n_pos = (y_train_bin == 1).sum()
         spw   = 1.0 if resample_ratio is not None else n_neg / max(n_pos, 1)
@@ -203,8 +228,8 @@ def train(
             eval_metric           = "logloss",
             scale_pos_weight      = spw,
         )
-        print(f"Training XGBoost classifier (scale_pos_weight={spw:.1f}) ...")
-        model.fit(X_tr, y_tr, eval_set=[(X_val, y_val)], verbose=50)
+        print(f"Training XGBoost classifier (scale_pos_weight={spw:.1f}, delete_weight={delete_weight}) ...")
+        model.fit(X_tr, y_tr, sample_weight=w_tr, eval_set=[(X_val, y_val)], verbose=50)
         print(f"  Best iteration: {model.best_iteration}")
 
         prob_test  = model.predict_proba(X_test)[:, 1]
@@ -220,6 +245,7 @@ def train(
         metrics = {
             "mode":              "classifier",
             "scale_pos_weight":  round(spw, 2),
+            "delete_weight":     delete_weight,
             "threshold_sweep":   sweep,
             "best_threshold":    float(best_t),
             "threshold_metrics": sweep[best_t],
@@ -387,6 +413,10 @@ def main() -> None:
                         help="Negatives per positive after undersampling (classifier only, e.g. 3.0)")
     parser.add_argument("--min-fresh-recall",     type=float, default=0.80,
                         help="Drop rows where fresh_recall < this threshold (default: 0.80)")
+    parser.add_argument("--delete-weight",        type=float, default=1.0,
+                        help="Extra sample weight for delete-mutation positive rows in classifier (default: 1.0)")
+    parser.add_argument("--dataset-name",         default=None,
+                        help="Override output model/metrics filename stem (default: derived from CSV name)")
     args = parser.parse_args()
 
     if args.auto or args.data is None:
@@ -404,10 +434,11 @@ def main() -> None:
         learning_rate    = args.learning_rate,
         max_depth        = args.max_depth,
         save_model       = not args.no_save,
-        dataset_name     = os.path.splitext(os.path.basename(csv_path))[0],
+        dataset_name     = args.dataset_name or os.path.splitext(os.path.basename(csv_path))[0],
         use_classifier   = args.classifier,
         resample_ratio   = args.resample_ratio,
         min_fresh_recall = args.min_fresh_recall,
+        delete_weight    = args.delete_weight,
     )
 
 

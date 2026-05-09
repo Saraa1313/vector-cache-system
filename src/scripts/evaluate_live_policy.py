@@ -49,8 +49,6 @@ from common.partition_utils import (
 )
 
 _DEFAULT_N_PROBE = N_PROBE[0] if isinstance(N_PROBE, list) else N_PROBE
-# Order matters: always_fetch resets _freshness via _init_freshness on every fetch,
-# zeroing version_lag for all probed partitions. Run it last so learned sees real staleness.
 POLICIES = ["always_cache", "learned", "always_fetch"]
 
 
@@ -96,6 +94,24 @@ SCENARIOS = [
         mutation_fraction=0.40,
         n_targets=12,
         drift_scale=200.0,
+    ),
+    Scenario(
+        name="conc_delete_50pct",
+        label="concentrated top-12, 50% deletes  [heavy delete staleness]",
+        pattern="concentrated",
+        mutation_type="delete",
+        mutation_fraction=0.50,
+        n_targets=12,
+        drift_scale=10.0,
+    ),
+    Scenario(
+        name="conc_delete_10pct",
+        label="concentrated top-12, 10% deletes  [light delete staleness]",
+        pattern="concentrated",
+        mutation_type="delete",
+        mutation_fraction=0.10,
+        n_targets=12,
+        drift_scale=10.0,
     ),
     # ── Rank-targeted (tests model across probe-rank spectrum) ─────────────────
     Scenario(
@@ -218,6 +234,14 @@ def _build_mutations(
             new_ids  = new_ids[keep_mask]
             new_vecs = new_vecs[keep_mask]
 
+        if scenario.mutation_type == "delete":
+            n_delete = max(1, int(len(ids) * scenario.mutation_fraction))
+            del_idx  = rng.choice(len(ids), size=n_delete, replace=False)
+            keep_mask = np.ones(len(ids), dtype=bool)
+            keep_mask[del_idx] = False
+            new_ids  = new_ids[keep_mask]
+            new_vecs = new_vecs[keep_mask]
+
         mutated[cid] = (new_ids, new_vecs, version + 1)
         logs[cid] = {
             "updates":     n_update,
@@ -276,21 +300,26 @@ def _select_eval_queries(
     hot_cids: set[int],
     n_eval: int,
     rng: np.random.Generator,
+    rank_range: tuple[int, int] | None = None,
 ) -> list[tuple[int, np.ndarray]]:
     """
     Pick eval queries that (a) probe at least one target partition and (b) have the
     highest warm_frac = fraction of probes already in hot_cids.
 
-    Eval queries are spatially clustered around the target partitions, so their union
-    of probed partitions is small (typically well under CACHE_SIZE). Warming the cache
-    with these same queries loads exactly that focused partition neighbourhood, giving
-    near-zero cold misses during evaluation and making the staleness effect observable
-    on most probed partitions rather than just the target ones.
+    For rank_targeted scenarios, rank_range (1-based inclusive) is enforced: only
+    queries where a target partition appears within that rank window qualify. This
+    ensures staleness impact is measured at the intended probe ranks — not at
+    arbitrary ranks where that partition has low recall contribution.
     """
     candidates = []
     for qi in rng.permutation(len(all_queries)):
         probes = [int(c) for c in I_all[qi] if c >= 0]
-        if any(c in target_set for c in probes):
+        if rank_range is not None:
+            lo, hi = rank_range[0] - 1, rank_range[1]  # 1-based → 0-indexed slice
+            qualifies = any(c in target_set for c in probes[lo:hi])
+        else:
+            qualifies = any(c in target_set for c in probes)
+        if qualifies:
             warm_frac = sum(1 for c in probes if c in hot_cids) / len(probes)
             candidates.append((warm_frac, int(qi)))
     candidates.sort(reverse=True)  # highest warm_frac first
@@ -363,6 +392,8 @@ def main() -> None:
     parser.add_argument("--port",      type=int, default=GRPC_PORT)
     parser.add_argument("--scenarios", nargs="*", default=None,
                         help="Run only these scenario names (default: all)")
+    parser.add_argument("--name", default=None,
+                        help="Run name for output file, e.g. v2 → eval_v2.json (default: timestamp)")
     args = parser.parse_args()
 
     rng = np.random.default_rng(777)
@@ -436,6 +467,7 @@ def main() -> None:
 
         eval_queries = _select_eval_queries(
             all_queries, I_all, target_set, hot_cids, args.n_eval, rng,
+            rank_range=scenario.rank_range,
         )
         if len(eval_queries) < args.n_eval:
             print(f"  WARNING: only {len(eval_queries)} queries probe target partitions")
@@ -479,11 +511,14 @@ def main() -> None:
                     n_probe=args.n_probe,
                     fetch_policy="always_fetch",
                 ))
+            # Load each target partition with n_probe=1: centroids[cid] is nearest to
+            # itself, so this loads exactly partition cid without touching 31 neighbors
+            # that would evict the eval-query partitions already in the LRU.
             for cid in target_cids:
                 stub.Search(pb2.SearchRequest(
                     vector=centroids[cid].tolist(),
                     top_k=args.topk,
-                    n_probe=args.n_probe,
+                    n_probe=1,
                     fetch_policy="always_fetch",
                 ))
             # 4. Write mutations to MinIO — cache now holds stale, MinIO has fresh
@@ -543,10 +578,12 @@ def main() -> None:
     results_dir   = os.path.join(_project_root, "results")
     os.makedirs(results_dir, exist_ok=True)
     timestamp = time.strftime("%Y%m%d_%H%M%S")
-    out_path  = os.path.join(results_dir, f"eval_{timestamp}.json")
+    run_name  = args.name if args.name else timestamp
+    out_path  = os.path.join(results_dir, f"eval_{run_name}.json")
 
     output = {
         "timestamp": timestamp,
+        "run_name":  run_name,
         "config": {
             "n_probe":  args.n_probe,
             "topk":     args.topk,

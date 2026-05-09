@@ -30,6 +30,7 @@ FEATURE_COLS = [
     "partition_size",
     "update_fraction",
     "delete_fraction",
+    "size_reduction_fraction",   # (stale_size - fresh_size) / stale_size: net size shrink (0 for updates, >0 for deletes)
     "recon_error_stale",         # mean L2 dist of cached vectors to centroid
     "recon_error_rel_delta",     # (recon_error_fresh - recon_error_stale) / recon_error_stale: proportional drift
     # query-partition relevance — derivable from centroid search at runtime
@@ -107,14 +108,15 @@ def extract_features_for_qp(
     if stale_entry is not None:
         # Affected partition: use the pre-mutation copy for staleness features
         stale_ids, stale_vecs, stale_version = stale_entry
-        _,          fresh_vecs, fresh_version = fresh_entry
+        fresh_ids,  fresh_vecs, fresh_version = fresh_entry
     else:
         # Unaffected partition: stale = fresh = current state in all_partitions
         actual_ids, actual_vecs, actual_version = snapshot.all_partitions[partition_id]
         stale_ids, stale_vecs, stale_version = actual_ids, actual_vecs, actual_version
-        fresh_vecs, fresh_version             = actual_vecs, actual_version
+        fresh_ids, fresh_vecs, fresh_version  = actual_ids, actual_vecs, actual_version
 
     partition_size = int(len(stale_ids))
+    fresh_size = int(len(fresh_ids))
     safe_size = max(partition_size, 1)
 
     updates  = log.updates  if log else 0
@@ -122,10 +124,11 @@ def extract_features_for_qp(
     inserts  = log.inserts  if log else 0
     version_lag = max(0, fresh_version - stale_version)
 
-    update_fraction   = updates  / safe_size
-    delete_fraction   = deletes  / safe_size
-    insert_fraction   = inserts  / safe_size
-    mutation_fraction = (updates + deletes) / safe_size
+    update_fraction        = updates  / safe_size
+    delete_fraction        = deletes  / safe_size
+    insert_fraction        = inserts  / safe_size
+    mutation_fraction      = (updates + deletes) / safe_size
+    size_reduction_fraction = max(0.0, (partition_size - fresh_size) / safe_size)
 
     centroid_vec     = snapshot.centroids[partition_id]
     recon_stale      = _recon_error(centroid_vec, stale_vecs)
@@ -171,6 +174,7 @@ def extract_features_for_qp(
         "insert_count":                 inserts,
         "update_fraction":              round(update_fraction, 6),
         "delete_fraction":              round(delete_fraction, 6),
+        "size_reduction_fraction":      round(size_reduction_fraction, 6),
         "insert_fraction":              round(insert_fraction, 6),
         "mutation_fraction":            round(mutation_fraction, 6),
         "recon_error_stale":            round(recon_stale, 4),

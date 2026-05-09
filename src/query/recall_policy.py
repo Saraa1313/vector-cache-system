@@ -121,6 +121,7 @@ class RecallAwarePolicy:
 # Feature column order must match FEATURE_COLS in train_model.py / feature_extractor.py exactly.
 _FEATURE_COLS = [
     "version_lag", "partition_size", "update_fraction", "delete_fraction",
+    "size_reduction_fraction",
     "recon_error_stale", "recon_error_rel_delta",
     "normalized_probe_rank", "centroid_dist",
     "rel_gap_to_prev", "rel_gap_to_next", "candidate_fraction",
@@ -172,14 +173,18 @@ class LearnedPolicy:
         candidate_fraction: float,
         centroid_distances: list[float] | None,
     ) -> np.ndarray:
-        partition_size = int(f.get("latest_partition_size") or 0)
-        cached_size = int(f.get("cached_partition_size") or partition_size)
-        denom = max(float(cached_size), 1e-9)
+        # partition_size: use the cached (pre-mutation) size to match training features,
+        # where partition_size = len(stale_ids) = pre-mutation count.
+        cached_size = int(f.get("cached_partition_size") or 0)
+        latest_size = int(f.get("latest_partition_size") or cached_size)
+        partition_size = cached_size if cached_size > 0 else latest_size
+        denom = max(float(partition_size), 1e-9)
 
         updates = f.get("cumulative_updates_since_cache") or 0
         deletes = f.get("cumulative_deletes_since_cache") or 0
         inserts = f.get("cumulative_inserts_since_cache") or 0
         version_lag = max(0, (f.get("latest_known_version") or 0) - (f.get("cached_version") or 0))
+        size_reduction_fraction = max(0.0, (partition_size - latest_size) / max(partition_size, 1e-9))
 
         recon_stale = f.get("cached_reconstruction_error") or 0.0
         recon_latest = f.get("latest_reconstruction_error")
@@ -206,6 +211,7 @@ class LearnedPolicy:
             partition_size,
             updates / denom,
             deletes / denom,
+            size_reduction_fraction,
             recon_stale,
             recon_rel_delta,
             probe_rank / max(self.n_probe, 1),
