@@ -379,6 +379,8 @@ def train(
         os.makedirs(MODEL_DIR, exist_ok=True)
         name     = dataset_name or os.path.splitext(os.path.basename(csv_path))[0]
         suffix   = "_xgb_clf" if use_classifier else "_xgb"
+        if name.endswith(suffix):
+            name = name[: -len(suffix)]
         model_path   = os.path.join(MODEL_DIR, f"{name}{suffix}.ubj")
         metrics_path = os.path.join(MODEL_DIR, f"{name}{suffix}_metrics.json")
         model.save_model(model_path)
@@ -398,6 +400,8 @@ def main() -> None:
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--data",   default=None, help="Path to training CSV")
     group.add_argument("--auto",   action="store_true", help="Auto-pick latest version CSV")
+    group.add_argument("--merge",  nargs="+", default=None, metavar="CSV",
+                       help="Merge multiple CSVs before training (e.g. --merge v15.csv v16.csv)")
     parser.add_argument("--nonzero-weight",       type=float, default=5.0,
                         help="Sample weight for rows with recall_drop > 0 (default: 5.0)")
     parser.add_argument("--test-size",            type=float, default=0.20)
@@ -419,7 +423,18 @@ def main() -> None:
                         help="Override output model/metrics filename stem (default: derived from CSV name)")
     args = parser.parse_args()
 
-    if args.auto or args.data is None:
+    if args.merge:
+        import tempfile
+        dfs = []
+        for p in args.merge:
+            print(f"Merging: {p}")
+            dfs.append(pd.read_csv(p))
+        merged = pd.concat(dfs, ignore_index=True)
+        tmp = tempfile.NamedTemporaryFile(suffix=".csv", delete=False)
+        merged.to_csv(tmp.name, index=False)
+        csv_path = tmp.name
+        print(f"  Merged {len(dfs)} CSVs → {len(merged):,} rows → {tmp.name}")
+    elif args.auto or args.data is None:
         csv_path = _latest_csv(DATA_DIR)
         print(f"Auto-selected: {csv_path}")
     else:

@@ -367,6 +367,24 @@ RANK_TARGETED_TEMPLATES: list[WorkloadTemplate] = [
                      n_target_partitions=8, rank_range=(1, 4),
                      query_types=("hot", "boundary"),                          rng_seed=203),
 
+    WorkloadTemplate("delete_close_rank_20pct",
+                     mutation_type="delete", mutation_fraction=0.20,
+                     drift_magnitude="low",    spatial_pattern="rank_targeted",
+                     n_target_partitions=8, rank_range=(1, 4),
+                     query_types=("hot", "boundary"),                          rng_seed=230),
+
+    WorkloadTemplate("delete_close_rank_30pct",
+                     mutation_type="delete", mutation_fraction=0.30,
+                     drift_magnitude="low",    spatial_pattern="rank_targeted",
+                     n_target_partitions=8, rank_range=(1, 4),
+                     query_types=("hot", "boundary"),                          rng_seed=231),
+
+    WorkloadTemplate("delete_close_rank_50pct",
+                     mutation_type="delete", mutation_fraction=0.50,
+                     drift_magnitude="low",    spatial_pattern="rank_targeted",
+                     n_target_partitions=8, rank_range=(1, 4),
+                     query_types=("hot", "boundary"),                          rng_seed=232),
+
     # ── MID ranks 9–16 ───────────────────────────────────────────────────────
     # Middle of the probe list — moderate geometric relevance.
     # Underrepresented in current training: concentrated/top_k land at close
@@ -419,6 +437,24 @@ RANK_TARGETED_TEMPLATES: list[WorkloadTemplate] = [
                      drift_magnitude="high",   spatial_pattern="rank_targeted",
                      n_target_partitions=8, rank_range=(9, 16),
                      query_types=("hot", "boundary"),                          rng_seed=217),
+
+    WorkloadTemplate("delete_mid_rank_20pct",
+                     mutation_type="delete", mutation_fraction=0.20,
+                     drift_magnitude="low",    spatial_pattern="rank_targeted",
+                     n_target_partitions=8, rank_range=(9, 16),
+                     query_types=("hot", "boundary"),                          rng_seed=233),
+
+    WorkloadTemplate("delete_mid_rank_30pct",
+                     mutation_type="delete", mutation_fraction=0.30,
+                     drift_magnitude="low",    spatial_pattern="rank_targeted",
+                     n_target_partitions=8, rank_range=(9, 16),
+                     query_types=("hot", "boundary"),                          rng_seed=234),
+
+    WorkloadTemplate("delete_mid_rank_50pct",
+                     mutation_type="delete", mutation_fraction=0.50,
+                     drift_magnitude="low",    spatial_pattern="rank_targeted",
+                     n_target_partitions=8, rank_range=(9, 16),
+                     query_types=("hot", "boundary"),                          rng_seed=235),
 
     # ── LATE ranks 25–32 ─────────────────────────────────────────────────────
     # Far end of the probe list — geometrically distant, rarely contain true
@@ -473,6 +509,24 @@ RANK_TARGETED_TEMPLATES: list[WorkloadTemplate] = [
                      drift_magnitude="high",   spatial_pattern="rank_targeted",
                      n_target_partitions=8, rank_range=(25, 32),
                      query_types=("hot", "boundary"),                          rng_seed=227),
+
+    WorkloadTemplate("delete_late_rank_20pct",
+                     mutation_type="delete", mutation_fraction=0.20,
+                     drift_magnitude="low",    spatial_pattern="rank_targeted",
+                     n_target_partitions=8, rank_range=(25, 32),
+                     query_types=("hot", "boundary"),                          rng_seed=236),
+
+    WorkloadTemplate("delete_late_rank_30pct",
+                     mutation_type="delete", mutation_fraction=0.30,
+                     drift_magnitude="low",    spatial_pattern="rank_targeted",
+                     n_target_partitions=8, rank_range=(25, 32),
+                     query_types=("hot", "boundary"),                          rng_seed=237),
+
+    WorkloadTemplate("delete_late_rank_50pct",
+                     mutation_type="delete", mutation_fraction=0.50,
+                     drift_magnitude="low",    spatial_pattern="rank_targeted",
+                     n_target_partitions=8, rank_range=(25, 32),
+                     query_types=("hot", "boundary"),                          rng_seed=238),
 ]
 
 # ── Chained templates (cross-template staleness) ─────────────────────────────

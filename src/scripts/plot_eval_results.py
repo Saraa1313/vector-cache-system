@@ -32,6 +32,9 @@ SCENARIO_SHORT = {
     "rank_close_update_50pct":  "Rank Close\nUpdate 50%",
     "rank_mid_update_50pct":    "Rank Mid\nUpdate 50%",
     "rank_late_update_50pct":   "Rank Late\nUpdate 50%",
+    "rank_close_delete_50pct":  "Rank Close\nDelete 50%",
+    "rank_mid_delete_50pct":    "Rank Mid\nDelete 50%",
+    "rank_late_delete_50pct":   "Rank Late\nDelete 50%",
 }
 
 

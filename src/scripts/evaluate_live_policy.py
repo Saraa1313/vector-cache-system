@@ -144,6 +144,37 @@ SCENARIOS = [
         drift_scale=200.0,
         rank_range=(25, 32),
     ),
+    # ── Rank-targeted deletes (validates size_reduction_fraction fix) ──────────
+    Scenario(
+        name="rank_close_delete_50pct",
+        label="rank-targeted close (1-4), top-8 partitions, 50% deletes  [low rank delete OOD]",
+        pattern="rank_targeted",
+        mutation_type="delete",
+        mutation_fraction=0.50,
+        n_targets=8,
+        drift_scale=10.0,
+        rank_range=(1, 4),
+    ),
+    Scenario(
+        name="rank_mid_delete_50pct",
+        label="rank-targeted mid (9-16), top-8 partitions, 50% deletes  [mid rank delete OOD]",
+        pattern="rank_targeted",
+        mutation_type="delete",
+        mutation_fraction=0.50,
+        n_targets=8,
+        drift_scale=10.0,
+        rank_range=(9, 16),
+    ),
+    Scenario(
+        name="rank_late_delete_50pct",
+        label="rank-targeted late (25-32), top-8 partitions, 50% deletes  [high rank delete OOD]",
+        pattern="rank_targeted",
+        mutation_type="delete",
+        mutation_fraction=0.50,
+        n_targets=8,
+        drift_scale=10.0,
+        rank_range=(25, 32),
+    ),
 ]
 
 
